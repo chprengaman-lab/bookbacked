@@ -16,6 +16,30 @@ const SLOT_SECTIONS: { slot: RosterSlot; label: string }[] = [
   { slot: 'taxi', label: 'Taxi Squad' },
 ];
 
+function slotBadgeLabel(player: LockedRosteredPlayer) {
+  if (player.slot === 'starter') return player.starterSlotLabel ?? 'START';
+  if (player.slot === 'ir') return 'IR';
+  if (player.slot === 'taxi') return 'TAXI';
+  return 'BN';
+}
+
+const SLOT_BADGE_STYLES: Record<RosterSlot, string> = {
+  starter: 'bg-accent text-accent-foreground',
+  bench: 'bg-secondary text-secondary-foreground',
+  ir: 'bg-destructive/15 text-destructive',
+  taxi: 'border border-border bg-transparent text-foreground',
+};
+
+function SlotBadge({ player }: { player: LockedRosteredPlayer }) {
+  return (
+    <span
+      className={`flex h-7 w-14 shrink-0 items-center justify-center rounded-md text-xs font-bold uppercase tracking-wide ${SLOT_BADGE_STYLES[player.slot]}`}
+    >
+      {slotBadgeLabel(player)}
+    </span>
+  );
+}
+
 function groupBySlot(players: LockedRosteredPlayer[]) {
   const groups = new Map<RosterSlot, LockedRosteredPlayer[]>(
     SLOT_SECTIONS.map(({ slot }) => [slot, []]),
@@ -199,13 +223,13 @@ export function LeagueImport() {
                     {players.map((player) => (
                       <div
                         key={player.externalId}
-                        className="flex items-center justify-between gap-4 px-4 py-3"
+                        className="flex items-center gap-3 px-4 py-3"
                       >
-                        <div>
+                        <SlotBadge player={player} />
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium">{player.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {(player.starterSlotLabel ?? player.position) ?? '—'} ·{' '}
-                            {player.team ?? 'FA'}
+                            {player.position ?? '—'} · {player.team ?? 'FA'}
                             {player.commenceTime
                               ? ` · ${new Date(player.commenceTime).toLocaleString()}`
                               : ''}
