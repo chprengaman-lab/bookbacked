@@ -68,6 +68,20 @@ type LadderRow = {
   price: string;
 };
 
+type DiscoveredLineRow = {
+  key: string;
+  market: string;
+  book: string;
+  point: string;
+  overYes: string;
+  underNo: string;
+  kind: 'Primary' | 'Alternate';
+  source: 'PropLine' | 'SportsGameOdds';
+  updatedAt: string;
+  marketOrder: number;
+  sortPoint: number;
+};
+
 type DetailViewModel = {
   name: string;
   team: string;
@@ -84,6 +98,7 @@ type DetailViewModel = {
   markets: MarketRow[];
   translationMarkets: { name: string; value: string }[];
   ladder: LadderRow[];
+  allLines: DiscoveredLineRow[];
   altLineCount: number;
   capturedAt: string;
   source: 'live' | 'demo';
@@ -158,8 +173,45 @@ function chosenBooks(markets: PlayerMarketSnapshot[]) {
       return (leftPreferred < 0 ? 99 : leftPreferred) -
         (rightPreferred < 0 ? 99 : rightPreferred);
     })
-    .slice(0, 5)
     .map(([id, value]) => ({ id, name: value.name }));
+}
+
+function discoveredLines(markets: PlayerMarketSnapshot[]) {
+  return markets
+    .flatMap((market) =>
+      [...market.primaryLines, ...market.alternateLines].map((line, index) => ({
+        key: `${market.marketKey}:${line.source}:${line.bookmakerId}:${line.point ?? 'none'}:${line.isAlternate ? 'alt' : 'main'}:${index}`,
+        market: market.label,
+        book: line.bookmakerName,
+        point: line.point == null ? '—' : line.point.toFixed(1),
+        overYes: formatAmerican(line.prices.over ?? line.prices.yes),
+        underNo: formatAmerican(line.prices.under ?? line.prices.no),
+        kind: line.isAlternate ? ('Alternate' as const) : ('Primary' as const),
+        source:
+          line.source === 'propline'
+            ? ('PropLine' as const)
+            : ('SportsGameOdds' as const),
+        updatedAt: line.lastUpdatedAt
+          ? new Date(line.lastUpdatedAt).toLocaleString([], {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })
+          : '—',
+        marketOrder: MARKET_ORDER.indexOf(market.marketKey),
+        sortPoint: line.point ?? Number.NEGATIVE_INFINITY,
+      })),
+    )
+    .sort((left, right) => {
+      return (
+        (left.marketOrder < 0 ? 99 : left.marketOrder) -
+          (right.marketOrder < 0 ? 99 : right.marketOrder) ||
+        (left.kind === right.kind ? 0 : left.kind === 'Primary' ? -1 : 1) ||
+        left.sortPoint - right.sortPoint ||
+        left.book.localeCompare(right.book)
+      );
+    });
 }
 
 function alternateLadder(market: PlayerMarketSnapshot | undefined) {
@@ -235,7 +287,7 @@ function liveViewModel(
         (rightIndex < 0 ? 99 : rightIndex);
     });
   const books = chosenBooks(markets);
-  const marketRows = markets.slice(0, 7).map((market) => ({
+  const marketRows = markets.map((market) => ({
     key: market.marketKey,
     market: market.label,
     consensus: marketConsensus(market),
@@ -274,6 +326,7 @@ function liveViewModel(
       .slice(0, 3)
       .map((market) => ({ name: market.market, value: market.consensus })),
     ladder: alternateLadder(ladderMarket),
+    allLines: discoveredLines(markets),
     altLineCount: player.markets.reduce(
       (total, market) => total + market.alternateLines.length,
       0,
@@ -302,6 +355,7 @@ function fallbackViewModel(profile: FallbackPlayerProfile): DetailViewModel {
     })),
     translationMarkets: profile.markets,
     ladder: [],
+    allLines: [],
     altLineCount: 0,
     capturedAt: 'Static sample',
     source: 'demo',
@@ -403,7 +457,7 @@ export default function PlayerDetailClient({
               <div className="eyebrow">
                 {profile.pos}
                 {profile.positionRank ? ` #${profile.positionRank}` : ''} ·{' '}
-                {profile.source === 'live' ? 'LIVE NFL SLATE' : 'SAMPLE'}
+                PLAYER ZOOM · {profile.source === 'live' ? 'LIVE NFL SLATE' : 'SAMPLE'}
               </div>
               <h1>{profile.name}</h1>
               <p>
@@ -477,6 +531,45 @@ export default function PlayerDetailClient({
           )}
           <div className="detail-disclaimer"><Check aria-hidden="true" /> PropLine supplies primary consensus coverage; SportsGameOdds enriches the board with additional books and alternate lines.</div>
         </section>
+
+        <section className="all-lines-card">
+          <div className="detail-card-head">
+            <div><span>FULL LINE INVENTORY</span><h2>Every discovered line</h2><p>Primary and alternate prices across every sportsbook in this snapshot.</p></div>
+            <Badge variant="outline">{profile.allLines.length} lines</Badge>
+          </div>
+          {profile.allLines.length ? (
+            <Table className="all-lines-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>MARKET</TableHead>
+                  <TableHead>SPORTSBOOK</TableHead>
+                  <TableHead>TYPE</TableHead>
+                  <TableHead>LINE</TableHead>
+                  <TableHead>OVER / YES</TableHead>
+                  <TableHead>UNDER / NO</TableHead>
+                  <TableHead>SOURCE</TableHead>
+                  <TableHead>UPDATED</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {profile.allLines.map((line) => (
+                  <TableRow key={line.key}>
+                    <TableCell><strong>{line.market}</strong></TableCell>
+                    <TableCell>{line.book}</TableCell>
+                    <TableCell><Badge variant="outline" className={line.kind === 'Alternate' ? 'profile-ceiling' : 'profile-stable'}>{line.kind}</Badge></TableCell>
+                    <TableCell><strong className="consensus-number">{line.point}</strong></TableCell>
+                    <TableCell>{line.overYes}</TableCell>
+                    <TableCell>{line.underNo}</TableCell>
+                    <TableCell>{line.source}</TableCell>
+                    <TableCell>{line.updatedAt}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="empty-state"><BarChart3 aria-hidden="true" /><h3>Live line inventory unavailable</h3><p>This sample player will populate when they appear on the active sportsbook slate.</p></div>
+          )}
+        </section>
       </div>
     </main>
   );
@@ -491,8 +584,8 @@ function DetailHeader({ status }: { status: 'loading' | 'live' | 'fallback' }) {
           <div><div className="brand-name">BOOKBACKED</div><div className="brand-subtitle">BACKED BY THE BOOKS</div></div>
         </Link>
         <nav className="main-nav" aria-label="Primary navigation">
-          <Link className="nav-item" href="/">Compare</Link>
-          <Link className="nav-item nav-item-active" href="/?view=cheatsheet">Rankings</Link>
+          <Link className="nav-item nav-item-active" href="/">Rankings</Link>
+          <Link className="nav-item" href="/?view=compare">Compare</Link>
           <Link className="nav-item" href="/?view=optimizer">Optimizer</Link>
         </nav>
         <div className="header-actions">

@@ -1405,7 +1405,8 @@ button {
 
 .sportsbook-card,
 .fantasy-translation-card,
-.alt-lines-card {
+.alt-lines-card,
+.all-lines-card {
   overflow: hidden;
   background: rgba(255,255,255,.86);
   border: 1px solid #dfdcd0;
@@ -1527,7 +1528,32 @@ button {
 
 .fantasy-translation-card > p svg { width: 12px; flex: 0 0 auto; }
 
-.alt-lines-card { margin-top: 12px; }
+.alt-lines-card,
+.all-lines-card { margin-top: 12px; }
+
+.all-lines-table th {
+  height: 36px;
+  padding-inline: 12px;
+  color: #88909a;
+  background: #f7f6f1;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .07em;
+}
+
+.all-lines-table td {
+  height: 48px;
+  padding-inline: 12px;
+  color: #596777;
+  font-family: var(--font-geist-mono);
+  font-size: 9px;
+}
+
+.all-lines-table td:first-child {
+  min-width: 150px;
+  color: #2d3b4d;
+  font-family: var(--font-geist-sans);
+}
 
 .alt-ladder {
   display: grid;

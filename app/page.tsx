@@ -135,15 +135,15 @@ function PlayerIdentity({ player, compact = false, linked = false }: { player: P
 
 function Header({ activeView, setActiveView, feedState }: { activeView: View; setActiveView: (view: View) => void; feedState: 'loading' | 'live' | 'fallback' }) {
   const labels: { key: View; label: string }[] = [
-    { key: 'compare', label: 'Compare' },
     { key: 'cheatsheet', label: 'Rankings' },
+    { key: 'compare', label: 'Compare' },
     { key: 'optimizer', label: 'Optimizer' },
   ];
 
   return (
     <header className="site-header">
       <div className="page-shell header-inner">
-        <button className="logo-button" onClick={() => setActiveView('compare')} aria-label="BookBacked home"><Logo /></button>
+        <button className="logo-button" onClick={() => setActiveView('cheatsheet')} aria-label="BookBacked rankings"><Logo /></button>
         <nav className="main-nav" aria-label="Primary navigation">
           {labels.map((item) => (
             <button
@@ -286,7 +286,7 @@ function Cheatsheet({ players, summary, onCompare, onOptimize }: { players: Play
                 <TableRow key={player.name}>
                   <TableCell className="rank-cell">{index + 1}</TableCell>
                   <TableCell>
-                    <Link className="player-detail-link" href={playerHref(player)}>
+                    <Link className="player-detail-link" href={playerHref(player)} aria-label={`Open every discovered line for ${player.name}`}>
                       <PlayerIdentity player={player} />
                       <ArrowUpRight aria-hidden="true" />
                     </Link>
@@ -552,11 +552,11 @@ function Optimizer() {
 
 export default function Home() {
   const [activeView, setActiveView] = useState<View>(() => {
-    if (typeof window === 'undefined') return 'compare';
+    if (typeof window === 'undefined') return 'cheatsheet';
     const requestedView = new URLSearchParams(window.location.search).get('view');
     return requestedView === 'cheatsheet' || requestedView === 'compare' || requestedView === 'optimizer'
       ? requestedView
-      : 'compare';
+      : 'cheatsheet';
   });
   const [liveSummary, setLiveSummary] = useState<UiSnapshot | null>(null);
   const [feedState, setFeedState] = useState<'loading' | 'live' | 'fallback'>('loading');
