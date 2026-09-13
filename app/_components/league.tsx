@@ -20,6 +20,7 @@ type RosterResponse = {
   season: string;
   ownerDisplayName: string | null;
   players: LockedRosteredPlayer[];
+  oddsAvailable: boolean;
 };
 
 type Stage = 'idle' | 'loading-leagues' | 'leagues' | 'loading-roster' | 'roster';
@@ -157,6 +158,12 @@ export function LeagueImport() {
               Back to leagues
             </Button>
           </div>
+          {!roster.oddsAvailable && (
+            <p className="text-sm text-muted-foreground">
+              NFL odds data is temporarily unavailable, so lock status can&apos;t
+              be determined right now. Showing your roster only.
+            </p>
+          )}
           <div className="divide-y divide-border rounded-lg border border-border">
             {roster.players.map((player) => (
               <div

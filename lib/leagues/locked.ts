@@ -1,4 +1,4 @@
-import type { NflGameSnapshot, NflSnapshot } from '@/lib/bookbacked/types';
+import type { NflGameSnapshot } from '@/lib/bookbacked/types';
 import type { LeagueRoster, RosteredPlayer } from '@/lib/leagues/types';
 
 export type LockStatus = 'locked' | 'upcoming' | 'unmatched';
@@ -44,7 +44,7 @@ function annotatePlayer(
 
 export function annotateLockStatus(
   roster: LeagueRoster,
-  snapshot: NflSnapshot,
+  snapshot: { games: NflGameSnapshot[] },
   now: Date = new Date(),
 ): LockedLeagueRoster {
   return {

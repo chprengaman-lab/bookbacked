@@ -7,7 +7,7 @@ import {
   SleeperUserNotFoundError,
 } from '@/lib/leagues/providers/sleeper';
 import { LeagueProviderRequestError } from '@/lib/leagues/providers/http';
-import { getNflSnapshot, NflDataUnavailableError } from '@/lib/bookbacked/nfl-data';
+import { getNflSnapshot } from '@/lib/bookbacked/nfl-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,18 +43,31 @@ export async function GET(request: Request) {
       );
     }
 
-    const [roster, snapshot] = await Promise.all([
+    // Roster access must not depend on the NFL odds pipeline: that's a
+    // separate integration to be layered in later, and its rate limits
+    // (or outages) are unrelated to whether Sleeper data is reachable.
+    const [rosterResult, snapshotResult] = await Promise.allSettled([
       getSleeperLeagueRoster(username, leagueId),
       getNflSnapshot(),
     ]);
+
+    if (rosterResult.status === 'rejected') throw rosterResult.reason;
+    const roster = rosterResult.value;
+
+    const oddsAvailable = snapshotResult.status === 'fulfilled';
+    const games = oddsAvailable ? snapshotResult.value.games : [];
     const matchedRoster = {
       ...roster,
-      players: matchRosterToSnapshot(roster.players, snapshot.games),
+      players: matchRosterToSnapshot(roster.players, games),
     };
 
-    return Response.json(annotateLockStatus(matchedRoster, snapshot), {
-      headers: NO_STORE_HEADERS,
-    });
+    return Response.json(
+      {
+        ...annotateLockStatus(matchedRoster, { games }),
+        oddsAvailable,
+      },
+      { headers: NO_STORE_HEADERS },
+    );
   } catch (error) {
     if (error instanceof SleeperUserNotFoundError) {
       return Response.json(
@@ -66,12 +79,6 @@ export async function GET(request: Request) {
       return Response.json(
         { error: error.message },
         { status: 404, headers: NO_STORE_HEADERS },
-      );
-    }
-    if (error instanceof NflDataUnavailableError) {
-      return Response.json(
-        { error: 'NFL data is temporarily unavailable.' },
-        { status: 503, headers: NO_STORE_HEADERS },
       );
     }
     if (error instanceof LeagueProviderRequestError) {
