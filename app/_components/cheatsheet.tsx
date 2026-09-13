@@ -316,9 +316,9 @@ export function Cheatsheet({
                     <Badge
                       variant="outline"
                       className={
-                        player.risk === 'Ceiling'
-                          ? 'profile-ceiling'
-                          : 'profile-stable'
+                        player.risk === 'Stable'
+                          ? 'profile-stable'
+                          : 'profile-ceiling'
                       }
                     >
                       {player.risk}

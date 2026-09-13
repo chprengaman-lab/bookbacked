@@ -10,7 +10,7 @@ export function Logo() {
       </div>
       <div>
         <div className="brand-name">BOOKBACKED</div>
-        <div className="brand-subtitle">BACKED BY THE BOOKS</div>
+        <div className="brand-subtitle">FOLLOW THE MONEY</div>
       </div>
     </div>
   );

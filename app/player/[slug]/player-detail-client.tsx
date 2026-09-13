@@ -541,7 +541,7 @@ export default function PlayerDetailClient({
                     <TableCell><strong>{row.market}</strong></TableCell>
                     {profile.books.map((book) => <TableCell key={book.id}>{row.byBook[book.id] ?? '—'}</TableCell>)}
                     <TableCell><strong className="consensus-number">{row.consensus}</strong></TableCell>
-                    <TableCell><Badge variant="outline" className={row.bookCount >= 8 ? 'profile-ceiling' : 'profile-stable'}>{row.bookCount ? `${row.bookCount} books` : 'Sample'}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={row.bookCount >= 8 ? 'profile-value' : 'profile-stable'}>{row.bookCount ? `${row.bookCount} books` : 'Sample'}</Badge></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -646,7 +646,7 @@ function DetailHeader({ status }: { status: 'loading' | 'live' | 'fallback' }) {
       <div className="page-shell header-inner detail-header-inner">
         <a className="brand-lockup" href="/" aria-label="BookBacked home">
           <div className="brand-mark" aria-hidden="true"><span>B</span></div>
-          <div><div className="brand-name">BOOKBACKED</div><div className="brand-subtitle">BACKED BY THE BOOKS</div></div>
+          <div><div className="brand-name">BOOKBACKED</div><div className="brand-subtitle">FOLLOW THE MONEY</div></div>
         </a>
         <nav className="main-nav" aria-label="Primary navigation">
           <a className="nav-item nav-item-active" href="/">Rankings</a>
@@ -654,7 +654,9 @@ function DetailHeader({ status }: { status: 'loading' | 'live' | 'fallback' }) {
           <a className="nav-item" href="/?view=optimizer">Optimizer</a>
         </nav>
         <div className="header-actions">
-          <span className={`live-pill ${status === 'fallback' ? 'is-fallback' : ''}`}>
+          <span className={`live-pill ${status === 'live' ? 'is-live' : ''} ${
+            status === 'fallback' ? 'is-fallback' : ''
+          }`}>
             <span className="live-dot" />
             {status === 'loading' ? 'Loading lines' : status === 'live' ? 'Lines live' : 'Sample fallback'}
           </span>

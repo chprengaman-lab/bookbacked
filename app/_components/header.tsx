@@ -46,7 +46,9 @@ export function Header({
         </nav>
         <div className="header-actions">
           <span
-            className={`live-pill ${feedState === 'fallback' ? 'is-fallback' : ''}`}
+            className={`live-pill ${feedState === 'live' ? 'is-live' : ''} ${
+              feedState === 'fallback' ? 'is-fallback' : ''
+            }`}
           >
             <span className="live-dot" />
             {feedState === 'loading'
