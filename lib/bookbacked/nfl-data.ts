@@ -527,34 +527,74 @@ function marketValue(markets: Map<string, PlayerMarketSnapshot>, key: string) {
   return markets.get(key)?.consensusLine ?? null;
 }
 
-function fantasyProjectionPpr(markets: Map<string, PlayerMarketSnapshot>) {
+function fantasyProjectionBreakdownPpr(
+  markets: Map<string, PlayerMarketSnapshot>,
+) {
   let points = 0;
-  let contributors = 0;
+  const components: NonNullable<
+    NflPlayerSnapshot['fantasyProjectionBreakdownPpr']
+  >['components'] = [];
 
-  const add = (value: number | null, multiplier: number) => {
+  const add = (
+    marketKeys: string[],
+    label: string,
+    value: number | null,
+    multiplier: number,
+    inputKind: 'consensus-threshold' | 'no-vig-probability' =
+      'consensus-threshold',
+  ) => {
     if (value == null) return;
-    points += value * multiplier;
-    contributors += 1;
+    const fantasyPoints = value * multiplier;
+    points += fantasyPoints;
+    components.push({
+      marketKeys,
+      label,
+      input: value,
+      inputKind,
+      multiplier,
+      fantasyPoints: Math.round(fantasyPoints * 100) / 100,
+    });
   };
 
-  add(marketValue(markets, 'player_pass_yds'), 0.04);
-  add(marketValue(markets, 'player_pass_tds'), 4);
-  add(marketValue(markets, 'player_pass_interceptions'), -2);
+  add(['player_pass_yds'], 'Passing yards', marketValue(markets, 'player_pass_yds'), 0.04);
+  add(['player_pass_tds'], 'Passing touchdowns', marketValue(markets, 'player_pass_tds'), 4);
+  add(['player_pass_interceptions'], 'Interceptions', marketValue(markets, 'player_pass_interceptions'), -2);
 
   const rushYards = marketValue(markets, 'player_rush_yds');
   const receivingYards = marketValue(markets, 'player_reception_yds');
   if (rushYards != null || receivingYards != null) {
-    add((rushYards ?? 0) + (receivingYards ?? 0), 0.1);
+    add(
+      ['player_rush_yds', 'player_reception_yds'],
+      receivingYards == null ? 'Rushing yards' : 'Rushing + receiving yards',
+      (rushYards ?? 0) + (receivingYards ?? 0),
+      0.1,
+    );
   } else {
-    add(marketValue(markets, 'player_rush_reception_yds'), 0.1);
+    add(
+      ['player_rush_reception_yds'],
+      'Rushing + receiving yards',
+      marketValue(markets, 'player_rush_reception_yds'),
+      0.1,
+    );
   }
-  add(marketValue(markets, 'player_receptions'), 1);
+  add(['player_receptions'], 'Receptions', marketValue(markets, 'player_receptions'), 1);
 
   const touchdownProbability =
     markets.get('player_anytime_td')?.consensusOverProbability ?? null;
-  add(touchdownProbability, 6);
+  add(
+    ['player_anytime_td'],
+    'Anytime touchdown probability',
+    touchdownProbability,
+    6,
+    'no-vig-probability',
+  );
 
-  return contributors >= 2 ? Math.round(points * 10) / 10 : null;
+  if (components.length < 2) return null;
+  return {
+    total: Math.round(points * 10) / 10,
+    method: 'sportsbook-threshold-proxy-v1' as const,
+    components,
+  };
 }
 
 function nearestProbabilityLine(lines: SportsbookLine[], target: number) {
@@ -640,57 +680,61 @@ function fantasyRangePpr(
   ].some((key) => (markets.get(key)?.alternateLines.length ?? 0) > 0);
   if (!hasAlternateComponent) return null;
 
-  const calculate = (targetProbability: number) => {
-    let points = 0;
-    let contributors = 0;
-    const add = (value: number | null, multiplier: number) => {
-      if (value == null) return;
-      points += value * multiplier;
-      contributors += 1;
-    };
-
-    add(alternateMarketValue(markets, 'player_pass_yds', targetProbability), 0.04);
-    add(alternateMarketValue(markets, 'player_pass_tds', targetProbability), 4);
-    add(marketValue(markets, 'player_pass_interceptions'), -2);
-
-    const rushYards = alternateMarketValue(
-      markets,
-      'player_rush_yds',
-      targetProbability,
-    );
-    const receivingYards = alternateMarketValue(
-      markets,
-      'player_reception_yds',
-      targetProbability,
-    );
-    if (rushYards != null || receivingYards != null) {
-      add((rushYards ?? 0) + (receivingYards ?? 0), 0.1);
-    } else {
-      add(
-        alternateMarketValue(
-          markets,
-          'player_rush_reception_yds',
-          targetProbability,
-        ),
-        0.1,
-      );
-    }
-    add(
-      alternateMarketValue(markets, 'player_receptions', targetProbability),
-      1,
-    );
-    add(markets.get('player_anytime_td')?.consensusOverProbability ?? null, 6);
-
-    return contributors >= 2 ? points : null;
+  const components: FantasyRangePpr['components'] = [];
+  const add = (
+    marketKeys: string[],
+    label: string,
+    floorInput: number | null,
+    ceilingInput: number | null,
+    multiplier: number,
+    inputMethod: FantasyRangePpr['components'][number]['inputMethod'] =
+      'alternate-lines-targeting-75-and-25-percent-over',
+  ) => {
+    if (floorInput == null || ceilingInput == null) return;
+    components.push({
+      marketKeys,
+      label,
+      floorInput,
+      ceilingInput,
+      multiplier,
+      floorPoints: Math.round(floorInput * multiplier * 100) / 100,
+      ceilingPoints: Math.round(ceilingInput * multiplier * 100) / 100,
+      inputMethod,
+    });
   };
 
-  const lower = calculate(0.75);
-  const upper = calculate(0.25);
-  if (lower == null || upper == null) return null;
+  add(['player_pass_yds'], 'Passing yards', alternateMarketValue(markets, 'player_pass_yds', 0.75), alternateMarketValue(markets, 'player_pass_yds', 0.25), 0.04);
+  add(['player_pass_tds'], 'Passing touchdowns', alternateMarketValue(markets, 'player_pass_tds', 0.75), alternateMarketValue(markets, 'player_pass_tds', 0.25), 4);
+  const interceptions = marketValue(markets, 'player_pass_interceptions');
+  add(['player_pass_interceptions'], 'Interceptions', interceptions, interceptions, -2, 'consensus-held-constant');
+
+  const floorRushYards = alternateMarketValue(markets, 'player_rush_yds', 0.75);
+  const ceilingRushYards = alternateMarketValue(markets, 'player_rush_yds', 0.25);
+  const floorReceivingYards = alternateMarketValue(markets, 'player_reception_yds', 0.75);
+  const ceilingReceivingYards = alternateMarketValue(markets, 'player_reception_yds', 0.25);
+  if (floorRushYards != null || ceilingRushYards != null || floorReceivingYards != null || ceilingReceivingYards != null) {
+    add(
+      ['player_rush_yds', 'player_reception_yds'],
+      floorReceivingYards == null && ceilingReceivingYards == null ? 'Rushing yards' : 'Rushing + receiving yards',
+      (floorRushYards ?? 0) + (floorReceivingYards ?? 0),
+      (ceilingRushYards ?? 0) + (ceilingReceivingYards ?? 0),
+      0.1,
+    );
+  } else {
+    add(['player_rush_reception_yds'], 'Rushing + receiving yards', alternateMarketValue(markets, 'player_rush_reception_yds', 0.75), alternateMarketValue(markets, 'player_rush_reception_yds', 0.25), 0.1);
+  }
+  add(['player_receptions'], 'Receptions', alternateMarketValue(markets, 'player_receptions', 0.75), alternateMarketValue(markets, 'player_receptions', 0.25), 1);
+  const touchdownProbability = markets.get('player_anytime_td')?.consensusOverProbability ?? null;
+  add(['player_anytime_td'], 'Anytime touchdown probability', touchdownProbability, touchdownProbability, 6, 'consensus-held-constant');
+
+  if (components.length < 2) return null;
+  const lower = components.reduce((total, item) => total + item.floorPoints, 0);
+  const upper = components.reduce((total, item) => total + item.ceilingPoints, 0);
   return {
     floor: Math.round(Math.min(lower, upper) * 10) / 10,
     ceiling: Math.round(Math.max(lower, upper) * 10) / 10,
     source: 'sports-game-odds',
+    components,
   };
 }
 
@@ -705,13 +749,15 @@ function finalizePlayers(
       const marketsByKey = new Map(
         markets.map((market) => [market.marketKey, market]),
       );
+      const projectionBreakdown = fantasyProjectionBreakdownPpr(marketsByKey);
       return {
         id: player.id,
         slug: player.slug,
         name: player.name,
         position: player.position,
         teamId: player.teamId,
-        fantasyProjectionPpr: fantasyProjectionPpr(marketsByKey),
+        fantasyProjectionPpr: projectionBreakdown?.total ?? null,
+        fantasyProjectionBreakdownPpr: projectionBreakdown,
         fantasyRangePpr: fantasyRangePpr(marketsByKey),
         markets,
         boomBust: boomBustRange(markets),

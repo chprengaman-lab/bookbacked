@@ -507,6 +507,20 @@ button {
 
 .player-table tr:hover td { background: #fbfcf6; }
 
+.player-ranking-row { position: relative; cursor: pointer; }
+
+.player-row-link {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border-radius: 4px;
+}
+
+.player-row-link:focus-visible {
+  outline: 2px solid #8fb82b;
+  outline-offset: -2px;
+}
+
 .rank-col,
 .rank-cell {
   width: 45px;
@@ -571,17 +585,49 @@ button {
 .player-cell strong { display: block; font-size: 12px; font-weight: 750; }
 .player-cell span { display: block; margin-top: 3px; color: #8a929c; font-size: 9px; }
 
-.market-lines { display: flex; gap: 5px; min-width: 205px; }
+.market-lines { display: flex; gap: 5px; min-width: 245px; }
 
 .market-lines span {
+  min-width: 72px;
   padding: 5px 7px;
   color: #626e7d;
   background: #f2f2ec;
   border: 1px solid #e4e2d9;
   border-radius: 5px;
-  font-family: var(--font-geist-mono);
-  font-size: 8px;
 }
+
+.market-lines small,
+.market-lines strong { display: block; }
+
+.market-lines small {
+  margin-bottom: 2px;
+  color: #9198a0;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: .07em;
+}
+
+.market-lines strong {
+  font-family: var(--font-geist-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.market-snapshot-definition {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 18px;
+  color: #6f7882;
+  background: #f4f7eb;
+  border-top: 1px solid #dfe6c9;
+  border-bottom: 1px solid #e7e4da;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.market-snapshot-definition svg { width: 13px; flex: 0 0 auto; color: #668500; }
+.market-snapshot-definition strong { color: #48563e; }
 
 .projection-cell { gap: 7px; }
 
@@ -1444,6 +1490,21 @@ button {
 .detail-card-head [data-slot="badge"] { color: #6e7783; background: white; font-size: 8px; }
 .detail-card-head [data-slot="badge"] svg { width: 11px; }
 
+.market-number-guide {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 14px;
+  color: #747f8a;
+  background: #f4f7eb;
+  border-bottom: 1px solid #dfe6c9;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.market-number-guide svg { width: 12px; flex: 0 0 auto; color: #668500; }
+.market-number-guide strong { color: #44543a; }
+
 .odds-detail-table th {
   height: 36px;
   padding-inline: 12px;
@@ -1502,31 +1563,43 @@ button {
 .translation-total strong { display: block; margin-top: 2px; color: #d8f47f; font-family: var(--font-geist-mono); font-size: 20px; }
 .translation-total [data-slot="badge"] { color: #142339; background: #c8f04a; }
 
-.translation-lines { margin-top: 12px; }
+.projection-equation { margin-top: 12px; }
 
-.translation-lines > div {
+.projection-equation-head,
+.projection-equation > div:not(.projection-equation-head) {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 3px 9px;
-  padding: 8px 0;
-  border-bottom: 1px solid #ece9e0;
+  grid-template-columns: minmax(0, 1fr) 56px 45px;
+  align-items: center;
+  gap: 8px;
 }
 
-.translation-lines span { color: #77828e; font-size: 9px; }
-.translation-lines strong { font-family: var(--font-geist-mono); font-size: 9px; }
-.translation-lines i { grid-column: 1 / -1; display: block; height: 3px; background: #a2c539; border-radius: 5px; }
+.projection-equation-head { padding-bottom: 5px; color: #989fa7; font-size: 6px; font-weight: 800; letter-spacing: .07em; }
+.projection-equation-head span:nth-child(n+2) { text-align: right; }
+.projection-equation > div:not(.projection-equation-head) { padding: 8px 0; border-top: 1px solid #ece9e0; }
+.projection-equation > div > span { color: #66727f; font-size: 8px; font-weight: 650; }
+.projection-equation small { display: block; margin-top: 2px; color: #9098a1; font-family: var(--font-geist-mono); font-size: 8px; font-weight: 500; }
+.projection-equation > div > strong { color: #42505e; font-family: var(--font-geist-mono); font-size: 8px; text-align: right; }
 
-.fantasy-translation-card > p {
+.prototype-calculation-note,
+.model-caveat {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   margin-top: 13px;
-  color: #8a929c;
+  padding: 10px;
+  color: #7c644a;
+  background: #fff6e8;
+  border: 1px solid #f0d9b6;
+  border-radius: 8px;
   font-size: 8px;
   line-height: 1.5;
 }
 
-.fantasy-translation-card > p svg { width: 12px; flex: 0 0 auto; }
+.prototype-calculation-note svg,
+.model-caveat svg { width: 13px; flex: 0 0 auto; }
+.prototype-calculation-note strong,
+.model-caveat strong { color: #684725; }
+.model-caveat { color: #6b5d4c; background: #fff9ef; }
 
 .alt-lines-card,
 .all-lines-card { margin-top: 12px; }
@@ -1574,6 +1647,37 @@ button {
 .alt-ladder small { display: block; margin-top: 3px; color: #6c7784; font-family: var(--font-geist-mono); font-size: 9px; }
 .alt-ladder > div > div { height: 4px; margin-top: 10px; overflow: hidden; background: #e3e4da; border-radius: 6px; }
 .alt-ladder i { display: block; height: 100%; background: #94b92c; }
+
+.range-calculation {
+  margin: 0 17px 17px;
+  overflow: hidden;
+  border: 1px solid #e3e0d6;
+  border-radius: 10px;
+}
+
+.range-calculation-copy { padding: 13px 14px; background: #faf9f4; border-bottom: 1px solid #e8e5dc; }
+.range-calculation-copy > span { color: #87909a; font-size: 7px; font-weight: 800; letter-spacing: .1em; }
+.range-calculation-copy h3 { margin-top: 2px; color: #334154; font-size: 12px; font-weight: 750; }
+.range-calculation-copy p { max-width: 780px; margin-top: 4px; color: #828b95; font-size: 8px; line-height: 1.5; }
+
+.range-equation-head,
+.range-equation-row,
+.range-equation-total {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+}
+
+.range-equation-head { color: #9299a2; background: #f6f5f0; font-size: 7px; font-weight: 800; letter-spacing: .07em; }
+.range-equation-row { border-top: 1px solid #efede6; }
+.range-equation-row > span { color: #495665; font-size: 9px; font-weight: 700; }
+.range-equation-row small { display: block; margin-top: 2px; color: #949ba3; font-size: 7px; font-weight: 500; }
+.range-equation-row strong,
+.range-equation-total strong { color: #5f6b77; font-family: var(--font-geist-mono); font-size: 8px; }
+.range-equation-total { color: #46533e; background: #f1f6e4; border-top: 1px solid #dce6c1; font-size: 7px; font-weight: 800; letter-spacing: .06em; }
+.range-equation-total strong { color: #466000; font-size: 10px; }
 
 .detail-disclaimer {
   min-height: 42px;
@@ -1667,6 +1771,11 @@ button {
   .detail-signal-strip { grid-template-columns: 1fr 1fr; gap: 12px; }
   .detail-signal-strip > a { grid-column: 1 / -1; justify-content: center; }
   .alt-ladder { grid-template-columns: 1fr 1fr; }
+  .range-equation-head { display: none; }
+  .range-equation-row,
+  .range-equation-total { grid-template-columns: 1fr 1fr; }
+  .range-equation-row > span,
+  .range-equation-total > span { grid-column: 1 / -1; }
 }
 
 @layer base {

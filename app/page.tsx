@@ -1,7 +1,7 @@
 'use client';
+/* oxlint-disable next/no-html-link-for-pages */
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   Activity,
   ArrowDownUp,
@@ -12,6 +12,7 @@ import {
   ChevronDown,
   CircleHelp,
   Gauge,
+  Info,
   Lock,
   Plus,
   Search,
@@ -129,7 +130,7 @@ function PlayerIdentity({ player, compact = false, linked = false }: { player: P
   );
 
   return linked
-    ? <Link className="player-identity-link" href={playerHref(player)}>{identity}</Link>
+    ? <a className="player-identity-link" href={playerHref(player)}>{identity}</a>
     : identity;
 }
 
@@ -260,8 +261,13 @@ function Cheatsheet({ players, summary, onCompare, onOptimize }: { players: Play
         </div>
 
         <div className="table-intro">
-          <div><h2>Consensus cheatsheet</h2><p>{summary ? `Updated ${new Date(summary.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · PropLine + SportsGameOdds` : 'Static sample · Live feed unavailable'}</p></div>
+          <div><h2>Consensus cheatsheet</h2><p>{summary ? `Updated ${new Date(summary.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · PropLine + SportsGameOdds` : 'Prototype sample values · not live or calculated from current lines'}</p></div>
           <Button variant="ghost" className="method-button"><CircleHelp aria-hidden="true" /> Sportsbook-derived, no custom model</Button>
+        </div>
+
+        <div className="market-snapshot-definition">
+          <Info aria-hidden="true" />
+          <p><strong>Market snapshot</strong> shows each prop name with its consensus sportsbook threshold. ANY TD is shown as American odds. V1 PPR projection treats those thresholds as outcome estimates; outcome range uses priced alternate lines.</p>
         </div>
 
         {filteredPlayers.length ? (
@@ -283,25 +289,31 @@ function Cheatsheet({ players, summary, onCompare, onOptimize }: { players: Play
             </TableHeader>
             <TableBody>
               {filteredPlayers.map((player, index) => (
-                <TableRow key={player.name}>
-                  <TableCell className="rank-cell">{index + 1}</TableCell>
+                <TableRow key={player.name} className="player-ranking-row">
+                  <TableCell className="rank-cell">
+                    <a className="player-row-link" href={playerHref(player)} aria-label={`Open every discovered line for ${player.name}`}><span className="sr-only">Open {player.name}</span></a>
+                    {index + 1}
+                  </TableCell>
                   <TableCell>
-                    <Link className="player-detail-link" href={playerHref(player)} aria-label={`Open every discovered line for ${player.name}`}>
+                    <div className="player-detail-link">
                       <PlayerIdentity player={player} />
                       <ArrowUpRight aria-hidden="true" />
-                    </Link>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="market-lines">
                       {player.markets.map((market, marketIndex) => (
-                        <span key={`${player.name}-${marketIndex}-${market}`} title={player.marketLabels[marketIndex]}>{market}</span>
+                        <span key={`${player.name}-${marketIndex}-${market}`}>
+                          <small>{player.marketLabels[marketIndex]}</small>
+                          <strong>{market}</strong>
+                        </span>
                       ))}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="projection-cell">
                       <strong>{(player.projection + scoringAdjustment).toFixed(1)}</strong>
-                      <span className="trend-up">{player.source === 'live' ? `${player.bookCount ?? 0} books` : player.trend}</span>
+                      <span className="trend-up">{player.source === 'live' ? `${player.bookCount ?? 0} books` : 'Sample'}</span>
                     </div>
                   </TableCell>
                   <TableCell>

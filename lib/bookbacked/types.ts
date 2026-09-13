@@ -35,6 +35,35 @@ export type FantasyRangePpr = {
   floor: number;
   ceiling: number;
   source: 'sports-game-odds';
+  components: FantasyRangeComponentPpr[];
+};
+
+export type FantasyProjectionComponentPpr = {
+  marketKeys: string[];
+  label: string;
+  input: number;
+  inputKind: 'consensus-threshold' | 'no-vig-probability';
+  multiplier: number;
+  fantasyPoints: number;
+};
+
+export type FantasyProjectionBreakdownPpr = {
+  total: number;
+  method: 'sportsbook-threshold-proxy-v1';
+  components: FantasyProjectionComponentPpr[];
+};
+
+export type FantasyRangeComponentPpr = {
+  marketKeys: string[];
+  label: string;
+  floorInput: number;
+  ceilingInput: number;
+  multiplier: number;
+  floorPoints: number;
+  ceilingPoints: number;
+  inputMethod:
+    | 'alternate-lines-targeting-75-and-25-percent-over'
+    | 'consensus-held-constant';
 };
 
 export type NflPlayerSnapshot = {
@@ -44,6 +73,7 @@ export type NflPlayerSnapshot = {
   position: string | null;
   teamId: string | null;
   fantasyProjectionPpr: number | null;
+  fantasyProjectionBreakdownPpr: FantasyProjectionBreakdownPpr | null;
   fantasyRangePpr: FantasyRangePpr | null;
   markets: PlayerMarketSnapshot[];
   boomBust: BoomBustRange | null;

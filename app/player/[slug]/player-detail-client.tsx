@@ -1,7 +1,7 @@
 'use client';
+/* oxlint-disable next/no-html-link-for-pages */
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   ArrowLeft,
   BarChart3,
@@ -82,6 +82,26 @@ type DiscoveredLineRow = {
   sortPoint: number;
 };
 
+type ProjectionCalculationRow = {
+  marketKeys: string[];
+  label: string;
+  input: number;
+  inputKind: 'consensus-threshold' | 'no-vig-probability';
+  multiplier: number;
+  fantasyPoints: number;
+};
+
+type RangeCalculationRow = {
+  marketKeys: string[];
+  label: string;
+  floorInput: number;
+  ceilingInput: number;
+  multiplier: number;
+  floorPoints: number;
+  ceilingPoints: number;
+  inputMethod: 'alternate-lines-targeting-75-and-25-percent-over' | 'consensus-held-constant';
+};
+
 type DetailViewModel = {
   name: string;
   team: string;
@@ -96,7 +116,8 @@ type DetailViewModel = {
   positionRank: number | null;
   books: { id: string; name: string }[];
   markets: MarketRow[];
-  translationMarkets: { name: string; value: string }[];
+  projectionComponents: ProjectionCalculationRow[];
+  rangeComponents: RangeCalculationRow[];
   ladder: LadderRow[];
   allLines: DiscoveredLineRow[];
   altLineCount: number;
@@ -119,6 +140,15 @@ const MARKET_ORDER = [
 
 function percentage(value: number | null) {
   return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
+}
+
+function calculationInput(value: number, probability = false) {
+  return probability ? `${(value * 100).toFixed(1)}%` : value.toFixed(1);
+}
+
+function scoringMultiplier(value: number) {
+  const decimals = Math.abs(value) < 1 ? 2 : Number.isInteger(value) ? 0 : 1;
+  return `× ${value < 0 ? '−' : ''}${Math.abs(value).toFixed(decimals)}`;
 }
 
 function marketConsensus(market: PlayerMarketSnapshot) {
@@ -251,6 +281,7 @@ function alternateLadder(market: PlayerMarketSnapshot | undefined) {
 function liveViewModel(
   snapshot: NflSnapshot,
   slug: string,
+  fallbackProfile: FallbackPlayerProfile | null,
 ): DetailViewModel | null {
   const match = findSnapshotPlayer(snapshot, slug);
   if (!match) return null;
@@ -259,7 +290,6 @@ function liveViewModel(
   if (projection == null) return null;
   const adapted = adaptNflSnapshot(snapshot);
   const uiPlayer = adapted.players.find((candidate) => candidate.slug === slug);
-  if (!uiPlayer) return null;
   const team =
     player.teamId === game.homeTeam.id
       ? game.homeTeam
@@ -302,29 +332,39 @@ function liveViewModel(
   const ladderMarket = player.markets.find(
     (market) => market.marketKey === player.boomBust?.marketKey,
   );
-  const positionRank = adapted.players
-    .filter((candidate) => candidate.pos === uiPlayer.pos)
-    .findIndex((candidate) => candidate.slug === slug);
+  const positionRank = uiPlayer
+    ? adapted.players
+        .filter((candidate) => candidate.pos === uiPlayer.pos)
+        .findIndex((candidate) => candidate.slug === slug)
+    : -1;
+  const bookCount = new Set(
+    player.markets.flatMap((market) =>
+      market.primaryLines.map((line) => line.bookmakerId),
+    ),
+  ).size;
 
   return {
     name: player.name,
-    team: team?.abbreviation ?? team?.key?.toUpperCase() ?? 'NFL',
+    team:
+      team?.abbreviation ??
+      team?.key?.toUpperCase() ??
+      fallbackProfile?.team ??
+      'NFL',
     opponent: opponent
       ? `${isHome ? 'vs' : 'at'} ${opponent.abbreviation ?? opponent.name}`
-      : 'upcoming game',
-    pos: player.position ?? 'NFL',
-    color: uiPlayer.color,
+      : fallbackProfile?.opponent ?? 'upcoming game',
+    pos: player.position ?? fallbackProfile?.pos ?? 'NFL',
+    color: uiPlayer?.color ?? fallbackProfile?.color ?? '#334155',
     projection,
-    bookCount: uiPlayer.bookCount,
+    bookCount,
     floor: player.fantasyRangePpr?.floor ?? projection,
     ceiling: player.fantasyRangePpr?.ceiling ?? projection,
     kickoff: formatKickoff(game.commenceTime),
-    positionRank: positionRank < 0 ? null : positionRank + 1,
+    positionRank: !uiPlayer || positionRank < 0 ? null : positionRank + 1,
     books,
     markets: marketRows,
-    translationMarkets: marketRows
-      .slice(0, 3)
-      .map((market) => ({ name: market.market, value: market.consensus })),
+    projectionComponents: player.fantasyProjectionBreakdownPpr?.components ?? [],
+    rangeComponents: player.fantasyRangePpr?.components ?? [],
     ladder: alternateLadder(ladderMarket),
     allLines: discoveredLines(markets),
     altLineCount: player.markets.reduce(
@@ -353,7 +393,8 @@ function fallbackViewModel(profile: FallbackPlayerProfile): DetailViewModel {
       byBook: {},
       bookCount: 0,
     })),
-    translationMarkets: profile.markets,
+    projectionComponents: [],
+    rangeComponents: [],
     ladder: [],
     allLines: [],
     altLineCount: 0,
@@ -396,7 +437,7 @@ export default function PlayerDetailClient({
 
   const profile = useMemo(
     () =>
-      (snapshot ? liveViewModel(snapshot, slug) : null) ??
+      (snapshot ? liveViewModel(snapshot, slug, fallbackProfile) : null) ??
       (fallbackProfile ? fallbackViewModel(fallbackProfile) : null),
     [fallbackProfile, slug, snapshot],
   );
@@ -406,9 +447,9 @@ export default function PlayerDetailClient({
       <main className="min-h-screen bg-background text-foreground">
         <DetailHeader status={status} />
         <div className="page-shell player-detail-page">
-          <Link className="back-link" href="/?view=cheatsheet">
+          <a className="back-link" href="/?view=cheatsheet">
             <ArrowLeft aria-hidden="true" /> Back to rankings
-          </Link>
+          </a>
           <section className="board-card empty-state">
             <BarChart3 aria-hidden="true" />
             <h1>
@@ -435,15 +476,13 @@ export default function PlayerDetailClient({
         : profile.source === 'live'
           ? 'Limited'
           : 'Sample';
-  const midpoint = (profile.floor + profile.ceiling) / 2;
-
   return (
     <main className="min-h-screen bg-background text-foreground">
       <DetailHeader status={profile.source === 'live' ? 'live' : status} />
       <div className="page-shell player-detail-page">
-        <Link className="back-link" href="/?view=cheatsheet">
+        <a className="back-link" href="/?view=cheatsheet">
           <ArrowLeft aria-hidden="true" /> Back to rankings
-        </Link>
+        </a>
 
         <section className="player-detail-hero">
           <div className="player-hero-identity">
@@ -469,15 +508,15 @@ export default function PlayerDetailClient({
           <div className="player-hero-stats">
             <div><span>MARKET PROJ</span><strong>{profile.projection.toFixed(1)}</strong><small>PPR points</small></div>
             <div><span>BOOK COVERAGE</span><strong>{profile.bookCount || '—'}</strong><small>sportsbooks</small></div>
-            <div><span>OUTCOME RANGE</span><strong className="range-stat">{profile.floor.toFixed(1)}–{profile.ceiling.toFixed(1)}</strong><small>alt-line PPR range</small></div>
+            <div><span>OUTCOME RANGE</span><strong className="range-stat">{profile.rangeComponents.length ? `${profile.floor.toFixed(1)}–${profile.ceiling.toFixed(1)}` : '—'}</strong><small>{profile.rangeComponents.length ? 'alt-line PPR range' : 'no alternate-line range'}</small></div>
           </div>
         </section>
 
         <section className="detail-signal-strip">
-          <div><ShieldCheck aria-hidden="true" /><span>MARKET READ</span><strong>{profile.positionRank ? `${profile.pos}${profile.positionRank} on slate` : 'Sample profile'}</strong></div>
+          <div><ShieldCheck aria-hidden="true" /><span>MARKET READ</span><strong>{profile.positionRank ? `${profile.pos}${profile.positionRank} on slate` : profile.source === 'live' ? 'Active slate' : 'Sample profile'}</strong></div>
           <div><TrendingUp aria-hidden="true" /><span>ALT-LINE DEPTH</span><strong>{profile.altLineCount} lines</strong></div>
           <div><BarChart3 aria-hidden="true" /><span>BOOK AGREEMENT</span><strong>{agreement}</strong></div>
-          <Link href={`/?view=compare&player=${slug}`}><Swords aria-hidden="true" /> Compare {profile.name.split(' ')[0]}</Link>
+          <a href={`/?view=compare&player=${slug}`}><Swords aria-hidden="true" /> Compare {profile.name.split(' ')[0]}</a>
         </section>
 
         <div className="player-detail-grid">
@@ -486,6 +525,7 @@ export default function PlayerDetailClient({
               <div><span>SPORTSBOOK BOARD</span><h2>Current player markets</h2><p>{profile.capturedAt} · {profile.source === 'live' ? 'Live provider snapshot' : 'Fallback sample'}</p></div>
               <Badge variant="outline"><Clock3 aria-hidden="true" /> {profile.books.length} books</Badge>
             </div>
+            <div className="market-number-guide"><Info aria-hidden="true" /><p><strong>How to read this:</strong> “O 269.5 · −110” means over 269.5 at −110 American odds. Consensus is the median posted threshold across contributing books; anytime TD consensus is a no-vig probability. Coverage is the number of books used.</p></div>
             <Table className="odds-detail-table">
               <TableHeader>
                 <TableRow>
@@ -511,12 +551,23 @@ export default function PlayerDetailClient({
           <aside className="fantasy-translation-card">
             <div className="translation-icon"><Sparkles aria-hidden="true" /></div>
             <span>FANTASY TRANSLATION</span>
-            <h2>How the market gets to {profile.projection.toFixed(1)}</h2>
-            <div className="translation-total"><div><span>ALT-LINE MIDPOINT</span><strong>{midpoint.toFixed(1)}</strong></div><Badge>PPR</Badge></div>
-            <div className="translation-lines">
-              {profile.translationMarkets.map((market, index) => <div key={market.name}><span>{market.name}</span><strong>{market.value}</strong><i style={{ width: `${82 - index * 13}%` }} /></div>)}
-            </div>
-            <p><Info aria-hidden="true" /> Consensus props are translated with standard PPR scoring. No proprietary prediction model is added.</p>
+            <h2>Exact v1 calculation: {profile.projection.toFixed(1)} PPR</h2>
+            <div className="translation-total"><div><span>SUM OF COMPONENTS</span><strong>{profile.projection.toFixed(1)}</strong></div><Badge>PPR</Badge></div>
+            {profile.projectionComponents.length ? (
+              <div className="projection-equation" aria-label={`${profile.name} projection calculation`}>
+                <div className="projection-equation-head"><span>MARKET INPUT</span><span>SCORING</span><span>POINTS</span></div>
+                {profile.projectionComponents.map((component) => (
+                  <div key={component.marketKeys.join(':')}>
+                    <span>{component.label}<small>{calculationInput(component.input, component.inputKind === 'no-vig-probability')}</small></span>
+                    <strong>{scoringMultiplier(component.multiplier)}</strong>
+                    <strong>{component.fantasyPoints.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="prototype-calculation-note"><Info aria-hidden="true" /><p><strong>This number is a prototype sample, not a live calculation.</strong> The displayed {profile.projection.toFixed(1)} projection and {profile.floor.toFixed(1)}–{profile.ceiling.toFixed(1)} range were seeded for the interface; there are no sportsbook inputs behind them.</p></div>
+            )}
+            <div className="model-caveat"><Info aria-hidden="true" /><p><strong>Key v1 limitation:</strong> sportsbook lines are thresholds or approximate medians—not expected values. That proxy is reasonable for yardage, but much weaker for discrete touchdown and interception markets. This is the boom-or-bust issue to evaluate next.</p></div>
           </aside>
         </div>
 
@@ -529,6 +580,20 @@ export default function PlayerDetailClient({
           ) : (
             <div className="empty-state"><BarChart3 aria-hidden="true" /><h3>No alternate lines on this snapshot</h3><p>Consensus markets remain available above.</p></div>
           )}
+          {profile.rangeComponents.length ? (
+            <div className="range-calculation">
+              <div className="range-calculation-copy"><span>RANGE CALCULATION</span><h3>How {profile.floor.toFixed(1)}–{profile.ceiling.toFixed(1)} is derived</h3><p>The floor uses alternate thresholds priced nearest a 75% chance of going over; the ceiling uses those nearest 25%. Missing alternate components fall back to consensus, while interceptions and anytime-TD probability stay fixed.</p></div>
+              <div className="range-equation-head"><span>COMPONENT</span><span>FLOOR INPUT → PTS</span><span>CEILING INPUT → PTS</span></div>
+              {profile.rangeComponents.map((component) => (
+                <div className="range-equation-row" key={component.marketKeys.join(':')}>
+                  <span>{component.label}<small>{component.inputMethod === 'consensus-held-constant' ? 'held at consensus' : 'alternate-line targets'}</small></span>
+                  <strong>{calculationInput(component.floorInput, component.label.includes('probability'))} {scoringMultiplier(component.multiplier)} = {component.floorPoints.toFixed(2)}</strong>
+                  <strong>{calculationInput(component.ceilingInput, component.label.includes('probability'))} {scoringMultiplier(component.multiplier)} = {component.ceilingPoints.toFixed(2)}</strong>
+                </div>
+              ))}
+              <div className="range-equation-total"><span>ROUNDED TOTAL</span><strong>{profile.floor.toFixed(1)} PPR</strong><strong>{profile.ceiling.toFixed(1)} PPR</strong></div>
+            </div>
+          ) : null}
           <div className="detail-disclaimer"><Check aria-hidden="true" /> PropLine supplies primary consensus coverage; SportsGameOdds enriches the board with additional books and alternate lines.</div>
         </section>
 
@@ -579,14 +644,14 @@ function DetailHeader({ status }: { status: 'loading' | 'live' | 'fallback' }) {
   return (
     <header className="site-header">
       <div className="page-shell header-inner detail-header-inner">
-        <Link className="brand-lockup" href="/" aria-label="BookBacked home">
+        <a className="brand-lockup" href="/" aria-label="BookBacked home">
           <div className="brand-mark" aria-hidden="true"><span>B</span></div>
           <div><div className="brand-name">BOOKBACKED</div><div className="brand-subtitle">BACKED BY THE BOOKS</div></div>
-        </Link>
+        </a>
         <nav className="main-nav" aria-label="Primary navigation">
-          <Link className="nav-item nav-item-active" href="/">Rankings</Link>
-          <Link className="nav-item" href="/?view=compare">Compare</Link>
-          <Link className="nav-item" href="/?view=optimizer">Optimizer</Link>
+          <a className="nav-item nav-item-active" href="/">Rankings</a>
+          <a className="nav-item" href="/?view=compare">Compare</a>
+          <a className="nav-item" href="/?view=optimizer">Optimizer</a>
         </nav>
         <div className="header-actions">
           <span className={`live-pill ${status === 'fallback' ? 'is-fallback' : ''}`}>
