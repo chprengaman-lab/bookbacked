@@ -257,6 +257,11 @@ button {
   box-shadow: 0 0 0 3px rgba(200,240,74,.12);
 }
 
+.live-pill.is-fallback .live-dot {
+  background: #e4ad45;
+  box-shadow: 0 0 0 3px rgba(228,173,69,.14);
+}
+
 .account-button {
   width: 34px;
   height: 34px;

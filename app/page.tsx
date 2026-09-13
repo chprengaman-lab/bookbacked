@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Activity,
   ArrowDownUp,
@@ -34,6 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  adaptNflSnapshot,
+  type UiSnapshot,
+} from '@/lib/bookbacked/client';
+import type { NflSnapshot } from '@/lib/bookbacked/types';
 
 type View = 'cheatsheet' | 'compare' | 'optimizer';
 type SortKey = 'projection' | 'edge';
@@ -57,11 +63,16 @@ type Player = {
   teamTotal: number;
   gameTotal: number;
   anytimeTd: string;
+  slug?: string;
+  bookCount?: number;
+  altLineCount?: number;
+  kickoff?: string;
+  source?: 'live' | 'demo';
 };
 
 const positions = ['ALL', 'QB', 'RB', 'WR', 'TE', 'FLEX'] as const;
 
-const players: Player[] = [
+const demoPlayers: Player[] = [
   { rank: 1, name: 'Josh Allen', team: 'BUF', opponent: 'vs NE', pos: 'QB', color: '#2458A6', projection: 24.8, edge: 92, markets: ['269.5', '41.5', '2.5'], marketLabels: ['PASS YDS', 'RUSH YDS', 'PASS TD'], range: '19.2–31.6', low: 19.2, high: 31.6, trend: '+1.8', risk: 'Stable', teamTotal: 29.5, gameTotal: 51.5, anytimeTd: '+145' },
   { rank: 2, name: 'Bijan Robinson', team: 'ATL', opponent: 'at CAR', pos: 'RB', color: '#C41130', projection: 21.7, edge: 89, markets: ['74.5', '29.5', '-135'], marketLabels: ['RUSH YDS', 'REC YDS', 'ANY TD'], range: '14.8–28.9', low: 14.8, high: 28.9, trend: '+2.4', risk: 'Stable', teamTotal: 26.5, gameTotal: 46.5, anytimeTd: '-135' },
   { rank: 3, name: 'Ja’Marr Chase', team: 'CIN', opponent: 'vs PIT', pos: 'WR', color: '#F36A22', projection: 20.9, edge: 87, markets: ['84.5', '6.5', '+105'], marketLabels: ['REC YDS', 'CATCHES', 'ANY TD'], range: '11.7–31.2', low: 11.7, high: 31.2, trend: '+0.9', risk: 'Ceiling', teamTotal: 27.0, gameTotal: 48.5, anytimeTd: '+105' },
@@ -90,6 +101,10 @@ function playerSlug(name: string) {
   return name.toLowerCase().replaceAll('’', '').replaceAll(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+function playerHref(player: Player) {
+  return `/player/${player.slug ?? playerSlug(player.name)}`;
+}
+
 function Logo() {
   return (
     <div className="brand-lockup">
@@ -114,11 +129,11 @@ function PlayerIdentity({ player, compact = false, linked = false }: { player: P
   );
 
   return linked
-    ? <a className="player-identity-link" href={`/player/${playerSlug(player.name)}`}>{identity}</a>
+    ? <Link className="player-identity-link" href={playerHref(player)}>{identity}</Link>
     : identity;
 }
 
-function Header({ activeView, setActiveView }: { activeView: View; setActiveView: (view: View) => void }) {
+function Header({ activeView, setActiveView, feedState }: { activeView: View; setActiveView: (view: View) => void; feedState: 'loading' | 'live' | 'fallback' }) {
   const labels: { key: View; label: string }[] = [
     { key: 'compare', label: 'Compare' },
     { key: 'cheatsheet', label: 'Rankings' },
@@ -141,7 +156,10 @@ function Header({ activeView, setActiveView }: { activeView: View; setActiveView
           ))}
         </nav>
         <div className="header-actions">
-          <span className="live-pill"><span className="live-dot" /> Lines live</span>
+          <span className={`live-pill ${feedState === 'fallback' ? 'is-fallback' : ''}`}>
+            <span className="live-dot" />
+            {feedState === 'loading' ? 'Loading lines' : feedState === 'live' ? 'Lines live' : 'Sample fallback'}
+          </span>
           <Button className="account-button" variant="outline">CP</Button>
         </div>
       </div>
@@ -149,16 +167,16 @@ function Header({ activeView, setActiveView }: { activeView: View; setActiveView
   );
 }
 
-function WeekControls({ onOptimize }: { onOptimize: () => void }) {
+function WeekControls({ onOptimize, slateLabel }: { onOptimize: () => void; slateLabel: string }) {
   return (
     <div className="heading-actions">
-      <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+      <Button variant="outline" className="week-button">{slateLabel} <ChevronDown aria-hidden="true" /></Button>
       <Button className="optimize-button" onClick={onOptimize}><Sparkles aria-hidden="true" /> Optimize lineup</Button>
     </div>
   );
 }
 
-function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimize: () => void }) {
+function Cheatsheet({ players, summary, onCompare, onOptimize }: { players: Player[]; summary: UiSnapshot | null; onCompare: () => void; onOptimize: () => void }) {
   const [activePosition, setActivePosition] = useState<(typeof positions)[number]>('ALL');
   const [query, setQuery] = useState('');
   const [scoring, setScoring] = useState('PPR');
@@ -175,7 +193,7 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
       return matchesPosition && matchesQuery;
     });
     return [...rows].sort((a, b) => b[sortKey] - a[sortKey]);
-  }, [activePosition, query, sortKey]);
+  }, [activePosition, players, query, sortKey]);
 
   const scoringAdjustment = scoring === 'PPR' ? 0 : scoring === 'HALF' ? -1.4 : -2.8;
 
@@ -184,27 +202,27 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
       <section className="page-heading">
         <div>
           <div className="eyebrow"><Activity aria-hidden="true" /> WEEKLY MARKET BOARD</div>
-          <h1>Week 6 player rankings</h1>
-          <p>One decision score built from player props, game totals, implied team points, and market movement.</p>
+          <h1>Live NFL player rankings</h1>
+          <p>Consensus fantasy expectations translated directly from current player-prop markets.</p>
         </div>
-        <WeekControls onOptimize={onOptimize} />
+        <WeekControls onOptimize={onOptimize} slateLabel={summary?.slateLabel ?? 'Sample slate'} />
       </section>
 
       <section className="signal-grid" aria-label="Weekly market summary">
         <article className="signal-card signal-card-strong">
           <div className="signal-icon"><Gauge aria-hidden="true" /></div>
-          <div><span>Best game environment</span><strong>BUF vs NE</strong></div>
-          <div className="signal-stat"><strong>51.5</strong><span>total</span></div>
+          <div><span>Upcoming board</span><strong>{summary?.slateLabel ?? 'Sample slate'}</strong></div>
+          <div className="signal-stat"><strong>{summary?.gameCount ?? 6}</strong><span>games</span></div>
         </article>
         <article className="signal-card">
           <div className="signal-icon"><ArrowUpRight aria-hidden="true" /></div>
-          <div><span>Biggest riser</span><strong>Bijan Robinson</strong></div>
-          <div className="signal-stat positive"><strong>+2.4</strong><span>pts</span></div>
+          <div><span>Top consensus</span><strong>{players[0]?.name ?? 'Loading players'}</strong></div>
+          <div className="signal-stat positive"><strong>{players[0]?.projection.toFixed(1) ?? '—'}</strong><span>PPR</span></div>
         </article>
         <article className="signal-card">
           <div className="signal-icon"><ShieldCheck aria-hidden="true" /></div>
-          <div><span>Market coverage</span><strong>8 sportsbooks</strong></div>
-          <div className="signal-stat"><strong>247</strong><span>players</span></div>
+          <div><span>Market coverage</span><strong>{summary?.bookCount ?? 8} sportsbooks</strong></div>
+          <div className="signal-stat"><strong>{players.length}</strong><span>players</span></div>
         </article>
       </section>
 
@@ -242,7 +260,7 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
         </div>
 
         <div className="table-intro">
-          <div><h2>Consensus cheatsheet</h2><p>Updated 4 min ago · Demo lines</p></div>
+          <div><h2>Consensus cheatsheet</h2><p>{summary ? `Updated ${new Date(summary.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · PropLine + SportsGameOdds` : 'Static sample · Live feed unavailable'}</p></div>
           <Button variant="ghost" className="method-button"><CircleHelp aria-hidden="true" /> Sportsbook-derived, no custom model</Button>
         </div>
 
@@ -257,7 +275,7 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
                   <button className="sortable" onClick={() => setSortKey('projection')}>PROJ <ArrowDownUp aria-hidden="true" /></button>
                 </TableHead>
                 <TableHead>
-                  <button className="sortable" onClick={() => setSortKey('edge')}>EDGE SCORE <ArrowDownUp aria-hidden="true" /></button>
+                  <button className="sortable" onClick={() => setSortKey('edge')}>MARKET COVERAGE <ArrowDownUp aria-hidden="true" /></button>
                 </TableHead>
                 <TableHead>OUTCOME RANGE</TableHead>
                 <TableHead>PROFILE</TableHead>
@@ -268,10 +286,10 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
                 <TableRow key={player.name}>
                   <TableCell className="rank-cell">{index + 1}</TableCell>
                   <TableCell>
-                    <a className="player-detail-link" href={`/player/${playerSlug(player.name)}`}>
+                    <Link className="player-detail-link" href={playerHref(player)}>
                       <PlayerIdentity player={player} />
                       <ArrowUpRight aria-hidden="true" />
-                    </a>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div className="market-lines">
@@ -283,7 +301,7 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
                   <TableCell>
                     <div className="projection-cell">
                       <strong>{(player.projection + scoringAdjustment).toFixed(1)}</strong>
-                      <span className={player.trend.startsWith('+') ? 'trend-up' : 'trend-down'}>{player.trend}</span>
+                      <span className="trend-up">{player.source === 'live' ? `${player.bookCount ?? 0} books` : player.trend}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -310,7 +328,7 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
   );
 }
 
-function PlayerSearch({ value, onChange, label }: { value: Player; onChange: (player: Player) => void; label: string }) {
+function PlayerSearch({ players, value, onChange, label }: { players: Player[]; value: Player; onChange: (player: Player) => void; label: string }) {
   const [inputValue, setInputValue] = useState(value.name);
 
   function commitPlayer(name: string) {
@@ -341,22 +359,25 @@ function PlayerSearch({ value, onChange, label }: { value: Player; onChange: (pl
   );
 }
 
-function Compare() {
-  const [left, setLeft] = useState(players[2]);
-  const [right, setRight] = useState(players[4]);
+function Compare({ players, slateLabel, initialSlug }: { players: Player[]; slateLabel: string; initialSlug: string | null }) {
+  const initialLeft = players.find((player) => player.slug === initialSlug) ?? players[0];
+  const initialRight = players.find((player) => player.name !== initialLeft.name) ?? players[1];
+  const [left, setLeft] = useState(initialLeft);
+  const [right, setRight] = useState(initialRight);
   const advantage = left.projection >= right.projection ? left : right;
   const other = advantage.name === left.name ? right : left;
   const projectionGap = Math.abs(left.projection - right.projection).toFixed(1);
-  const confidence = Math.min(91, Math.round(55 + Math.abs(left.edge - right.edge) * 2.1));
+  const bookCoverage = Math.max(left.bookCount ?? 8, right.bookCount ?? 8);
+  const coveragePercent = Math.min(100, Math.round((bookCoverage / 15) * 100));
 
   const comparisonRows = [
     { label: 'Market projection', left: `${left.projection.toFixed(1)} pts`, right: `${right.projection.toFixed(1)} pts`, winner: left.projection >= right.projection ? 'left' : 'right' },
     { label: 'Primary yardage line', left: `${left.markets[0]} ${left.marketLabels[0].toLowerCase()}`, right: `${right.markets[0]} ${right.marketLabels[0].toLowerCase()}`, winner: Number.parseFloat(left.markets[0]) >= Number.parseFloat(right.markets[0]) ? 'left' : 'right' },
-    { label: 'Anytime TD', left: left.anytimeTd, right: right.anytimeTd, winner: left.edge >= right.edge ? 'left' : 'right' },
-    { label: 'Implied team total', left: left.teamTotal.toFixed(1), right: right.teamTotal.toFixed(1), winner: left.teamTotal >= right.teamTotal ? 'left' : 'right' },
-    { label: 'Game total', left: left.gameTotal.toFixed(1), right: right.gameTotal.toFixed(1), winner: left.gameTotal >= right.gameTotal ? 'left' : 'right' },
+    { label: 'Anytime TD', left: left.anytimeTd, right: right.anytimeTd, winner: left.anytimeTd !== '—' && right.anytimeTd !== '—' ? (Number.parseFloat(left.anytimeTd) <= Number.parseFloat(right.anytimeTd) ? 'left' : 'right') : undefined },
+    { label: 'Sportsbook coverage', left: `${left.bookCount ?? 8} books`, right: `${right.bookCount ?? 8} books`, winner: (left.bookCount ?? 8) >= (right.bookCount ?? 8) ? 'left' : 'right' },
+    { label: 'Alternate lines', left: `${left.altLineCount ?? 0} available`, right: `${right.altLineCount ?? 0} available`, winner: (left.altLineCount ?? 0) >= (right.altLineCount ?? 0) ? 'left' : 'right' },
     { label: 'Floor → ceiling', left: left.range, right: right.range, winner: left.low >= right.low ? 'left' : 'right' },
-    { label: 'Line movement', left: `${left.trend} pts`, right: `${right.trend} pts`, winner: Number.parseFloat(left.trend) >= Number.parseFloat(right.trend) ? 'left' : 'right' },
+    { label: 'Kickoff', left: left.kickoff ?? 'Sample slate', right: right.kickoff ?? 'Sample slate', winner: undefined },
   ];
 
   return (
@@ -368,34 +389,34 @@ function Compare() {
           <p>See where the market agrees, where outcomes diverge, and who gives your lineup the better path this week.</p>
         </div>
         <div className="heading-actions">
-          <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+          <Button variant="outline" className="week-button">{slateLabel} <ChevronDown aria-hidden="true" /></Button>
         </div>
       </section>
 
       <section className="compare-picker-card">
         <div className="compare-picker-grid">
-          <PlayerSearch key={`left-${left.name}`} value={left} onChange={setLeft} label="PLAYER ONE" />
+          <PlayerSearch key={`left-${left.name}`} players={players} value={left} onChange={setLeft} label="PLAYER ONE" />
           <button
             className="swap-button"
             aria-label="Swap players"
             onClick={() => { setLeft(right); setRight(left); }}
           ><ArrowLeftRight aria-hidden="true" /></button>
-          <PlayerSearch key={`right-${right.name}`} value={right} onChange={setRight} label="PLAYER TWO" />
+          <PlayerSearch key={`right-${right.name}`} players={players} value={right} onChange={setRight} label="PLAYER TWO" />
         </div>
-        <datalist id="player-list">{players.map((player) => <option key={player.name} value={player.name} />)}</datalist>
+        <datalist id="player-list" aria-label="Available players">{players.map((player) => <option key={player.name} value={player.name}>{player.name}</option>)}</datalist>
       </section>
 
       <section className="decision-banner">
         <div className="decision-icon"><Check aria-hidden="true" /></div>
         <div className="decision-copy">
-          <span>BOOKBACKED PICK</span>
+          <span>MARKET LEAN</span>
           <h2>Start {advantage.name}</h2>
-          <p>{advantage.name} carries a <strong>{projectionGap}-point market edge</strong> over {other.name}, supported by a stronger combined opportunity score.</p>
+          <p>{advantage.name} carries a <strong>{projectionGap}-point consensus advantage</strong> over {other.name} using current sportsbook player props.</p>
         </div>
         <div className="confidence-block">
-          <span>CONFIDENCE</span>
-          <strong>{confidence}%</strong>
-          <div><i style={{ width: `${confidence}%` }} /></div>
+          <span>BOOK COVERAGE</span>
+          <strong>{bookCoverage}</strong>
+          <div><i style={{ width: `${coveragePercent}%` }} /></div>
         </div>
       </section>
 
@@ -436,10 +457,10 @@ function Optimizer() {
   }
 
   const suggestedNames = lineupRows.map((row) => row[mode]);
-  const currentProjection = lineupRows.reduce((total, row) => total + (players.find((player) => player.name === row.current)?.projection ?? 0), 0);
+  const currentProjection = lineupRows.reduce((total, row) => total + (demoPlayers.find((player) => player.name === row.current)?.projection ?? 0), 0);
   const suggestedProjection = lineupRows.reduce((total, row) => {
     const selectedName = locked.includes(row.current) ? row.current : row[mode];
-    return total + (players.find((player) => player.name === selectedName)?.projection ?? 0);
+    return total + (demoPlayers.find((player) => player.name === selectedName)?.projection ?? 0);
   }, 0);
 
   return (
@@ -451,7 +472,7 @@ function Optimizer() {
           <p>Optimize the players already on your roster using the market’s expectation—and choose how much volatility you want.</p>
         </div>
         <div className="heading-actions">
-          <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+          <Button variant="outline" className="week-button">Sample roster <ChevronDown aria-hidden="true" /></Button>
         </div>
       </section>
 
@@ -470,7 +491,7 @@ function Optimizer() {
           </div>
           <div className="lineup-rows">
             {lineupRows.map((row, index) => {
-              const player = players.find((item) => item.name === row.current)!;
+              const player = demoPlayers.find((item) => item.name === row.current)!;
               const isLocked = locked.includes(row.current);
               return (
                 <div className="lineup-row" key={`${row.slot}-${index}`}>
@@ -530,20 +551,82 @@ function Optimizer() {
 }
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<View>('compare');
+  const [activeView, setActiveView] = useState<View>(() => {
+    if (typeof window === 'undefined') return 'compare';
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    return requestedView === 'cheatsheet' || requestedView === 'compare' || requestedView === 'optimizer'
+      ? requestedView
+      : 'compare';
+  });
+  const [liveSummary, setLiveSummary] = useState<UiSnapshot | null>(null);
+  const [feedState, setFeedState] = useState<'loading' | 'live' | 'fallback'>('loading');
+  const [requestedPlayer] = useState(() =>
+    typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('player'),
+  );
 
   useEffect(() => {
-    const requestedView = new URLSearchParams(window.location.search).get('view');
-    if (requestedView === 'cheatsheet' || requestedView === 'compare' || requestedView === 'optimizer') {
-      setActiveView(requestedView);
-    }
+    const controller = new AbortController();
+    fetch('/api/nfl/snapshot?maxGames=16&horizonDays=8', {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('NFL snapshot unavailable');
+        return (await response.json()) as NflSnapshot;
+      })
+      .then((snapshot) => {
+        const adapted = adaptNflSnapshot(snapshot);
+        if (adapted.players.length < 2) throw new Error('NFL snapshot is empty');
+        setLiveSummary(adapted);
+        setFeedState('live');
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setFeedState('fallback');
+      });
+    return () => controller.abort();
   }, []);
+
+  const activePlayers = useMemo<Player[]>(
+    () =>
+      liveSummary
+        ? liveSummary.players.map((player) => ({
+            rank: player.rank,
+            slug: player.slug,
+            name: player.name,
+            team: player.team,
+            opponent: player.opponent,
+            pos: player.pos,
+            color: player.color,
+            projection: player.projection,
+            edge: player.coverageScore,
+            bookCount: player.bookCount,
+            altLineCount: player.altLineCount,
+            markets: player.markets,
+            marketLabels: player.marketLabels,
+            range: player.range,
+            low: player.low,
+            high: player.high,
+            trend: '',
+            risk: player.risk,
+            teamTotal: 0,
+            gameTotal: 0,
+            anytimeTd: player.anytimeTd,
+            kickoff: player.kickoff,
+            source: 'live' as const,
+          }))
+        : demoPlayers,
+    [liveSummary],
+  );
+  const dataKey = liveSummary?.generatedAt ?? 'sample';
+  const slateLabel = liveSummary?.slateLabel ?? 'Sample slate';
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <Header activeView={activeView} setActiveView={setActiveView} />
-      {activeView === 'cheatsheet' && <Cheatsheet onCompare={() => setActiveView('compare')} onOptimize={() => setActiveView('optimizer')} />}
-      {activeView === 'compare' && <Compare />}
+      <Header activeView={activeView} setActiveView={setActiveView} feedState={feedState} />
+      {activeView === 'cheatsheet' && <Cheatsheet players={activePlayers} summary={liveSummary} onCompare={() => setActiveView('compare')} onOptimize={() => setActiveView('optimizer')} />}
+      {activeView === 'compare' && <Compare key={dataKey} players={activePlayers} slateLabel={slateLabel} initialSlug={requestedPlayer} />}
       {activeView === 'optimizer' && <Optimizer />}
     </main>
   );
