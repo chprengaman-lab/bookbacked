@@ -294,7 +294,7 @@ function Cheatsheet({ players, summary, onCompare, onOptimize }: { players: Play
                   <TableCell>
                     <div className="market-lines">
                       {player.markets.map((market, marketIndex) => (
-                        <span key={`${player.name}-${market}`} title={player.marketLabels[marketIndex]}>{market}</span>
+                        <span key={`${player.name}-${marketIndex}-${market}`} title={player.marketLabels[marketIndex]}>{market}</span>
                       ))}
                     </div>
                   </TableCell>
