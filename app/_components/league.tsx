@@ -7,7 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LockedRosteredPlayer } from '@/lib/leagues/locked';
-import type { RosterSlot } from '@/lib/leagues/types';
+import type { FreeAgentPlayer, RosterSlot } from '@/lib/leagues/types';
+
+const FREE_AGENT_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
+const FREE_AGENT_DISPLAY_CAP = 100;
 
 const SLOT_SECTIONS: { slot: RosterSlot; label: string }[] = [
   { slot: 'starter', label: 'Starting Lineup' },
@@ -77,6 +80,7 @@ type RosterResponse = {
 };
 
 type Stage = 'idle' | 'loading-leagues' | 'leagues' | 'loading-roster' | 'roster';
+type LeagueTab = 'roster' | 'free-agents';
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
@@ -98,6 +102,15 @@ export function LeagueImport() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
   const [roster, setRoster] = useState<RosterResponse | null>(null);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<LeagueTab>('roster');
+  const [freeAgents, setFreeAgents] = useState<FreeAgentPlayer[] | null>(null);
+  const [freeAgentsLoading, setFreeAgentsLoading] = useState(false);
+  const [freeAgentsError, setFreeAgentsError] = useState<string | null>(null);
+  const [faSearch, setFaSearch] = useState('');
+  const [faPosition, setFaPosition] = useState<(typeof FREE_AGENT_POSITIONS)[number]>(
+    'ALL',
+  );
 
   async function handleFindLeagues(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -125,18 +138,58 @@ export function LeagueImport() {
     const trimmed = username.trim();
     setStage('loading-roster');
     setError(null);
+    setActiveTab('roster');
+    setFreeAgents(null);
+    setFreeAgentsError(null);
 
     try {
       const payload = await fetchJson<RosterResponse>(
         `/api/leagues/sleeper?username=${encodeURIComponent(trimmed)}&leagueId=${encodeURIComponent(leagueId)}`,
       );
       setRoster(payload);
+      setSelectedLeagueId(leagueId);
       setStage('roster');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Something went wrong.');
       setStage('leagues');
     }
   }
+
+  async function loadFreeAgents(leagueId: string) {
+    setFreeAgentsLoading(true);
+    setFreeAgentsError(null);
+
+    try {
+      const payload = await fetchJson<{ leagueId: string; players: FreeAgentPlayer[] }>(
+        `/api/leagues/sleeper/free-agents?leagueId=${encodeURIComponent(leagueId)}`,
+      );
+      setFreeAgents(payload.players);
+    } catch (caught) {
+      setFreeAgentsError(
+        caught instanceof Error ? caught.message : 'Something went wrong.',
+      );
+    } finally {
+      setFreeAgentsLoading(false);
+    }
+  }
+
+  function handleSelectTab(tab: LeagueTab) {
+    setActiveTab(tab);
+    if (tab === 'free-agents' && freeAgents === null && !freeAgentsLoading && selectedLeagueId) {
+      void loadFreeAgents(selectedLeagueId);
+    }
+  }
+
+  const filteredFreeAgents = (freeAgents ?? []).filter((player) => {
+    if (faPosition !== 'ALL' && player.position !== faPosition) return false;
+    const query = faSearch.trim().toLowerCase();
+    if (query && !player.name.toLowerCase().includes(query)) return false;
+    return true;
+  });
+  const isFreeAgentListNarrowed = faPosition !== 'ALL' || faSearch.trim().length > 0;
+  const visibleFreeAgents = isFreeAgentListNarrowed
+    ? filteredFreeAgents
+    : filteredFreeAgents.slice(0, FREE_AGENT_DISPLAY_CAP);
 
   return (
     <div className="page-shell space-y-6 py-10">
@@ -205,52 +258,156 @@ export function LeagueImport() {
               size="sm"
               onClick={() => {
                 setRoster(null);
+                setSelectedLeagueId(null);
+                setFreeAgents(null);
                 setStage('leagues');
               }}
             >
               Back to leagues
             </Button>
           </div>
-          {!roster.oddsAvailable && (
-            <p className="text-sm text-muted-foreground">
-              NFL odds data is temporarily unavailable, so lock status can&apos;t
-              be determined right now. Showing your roster only.
-            </p>
+
+          <div className="flex gap-1 border-b border-border">
+            <button
+              className={`px-3 py-2 text-sm font-medium ${
+                activeTab === 'roster'
+                  ? 'border-b-2 border-accent text-foreground'
+                  : 'text-muted-foreground'
+              }`}
+              onClick={() => handleSelectTab('roster')}
+            >
+              My Roster
+            </button>
+            <button
+              className={`px-3 py-2 text-sm font-medium ${
+                activeTab === 'free-agents'
+                  ? 'border-b-2 border-accent text-foreground'
+                  : 'text-muted-foreground'
+              }`}
+              onClick={() => handleSelectTab('free-agents')}
+            >
+              Free Agents
+            </button>
+          </div>
+
+          {activeTab === 'roster' && (
+            <>
+              {!roster.oddsAvailable && (
+                <p className="text-sm text-muted-foreground">
+                  NFL odds data is temporarily unavailable, so lock status
+                  can&apos;t be determined right now. Showing your roster
+                  only.
+                </p>
+              )}
+              {(() => {
+                const grouped = groupBySlot(roster.players);
+                return SLOT_SECTIONS.map(({ slot, label }) => {
+                  const players = grouped.get(slot) ?? [];
+                  if (players.length === 0) return null;
+                  return (
+                    <div key={slot} className="space-y-2">
+                      <h3 className="text-sm font-semibold text-muted-foreground">
+                        {label}
+                      </h3>
+                      <div className="divide-y divide-border rounded-lg border border-border">
+                        {players.map((player) => (
+                          <div
+                            key={player.externalId}
+                            className="flex items-center gap-3 px-4 py-3"
+                          >
+                            <SlotBadge player={player} />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium">{player.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {player.position ?? '—'} · {player.team ?? 'FA'}
+                                {player.commenceTime
+                                  ? ` · ${new Date(player.commenceTime).toLocaleString()}`
+                                  : ''}
+                              </div>
+                            </div>
+                            <LockStatusBadge status={player.lockStatus} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </>
           )}
-          {(() => {
-            const grouped = groupBySlot(roster.players);
-            return SLOT_SECTIONS.map(({ slot, label }) => {
-              const players = grouped.get(slot) ?? [];
-              if (players.length === 0) return null;
-              return (
-                <div key={slot} className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground">
-                    {label}
-                  </h3>
+
+          {activeTab === 'free-agents' && (
+            <div className="space-y-3">
+              {freeAgentsLoading && (
+                <p className="text-sm text-muted-foreground">
+                  Loading free agents…
+                </p>
+              )}
+              {freeAgentsError && (
+                <p className="text-sm text-destructive">{freeAgentsError}</p>
+              )}
+              {freeAgents && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    No rankings yet -- this is the full unrostered player pool.
+                    Search or filter by position to narrow it down.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={faSearch}
+                      onChange={(event) => setFaSearch(event.target.value)}
+                      placeholder="Search free agents"
+                      aria-label="Search free agents"
+                      className="max-w-xs"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {FREE_AGENT_POSITIONS.map((pos) => (
+                        <Button
+                          key={pos}
+                          size="sm"
+                          variant={faPosition === pos ? 'default' : 'outline'}
+                          onClick={() => setFaPosition(pos)}
+                        >
+                          {pos}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {filteredFreeAgents.length} free agent
+                    {filteredFreeAgents.length === 1 ? '' : 's'}
+                    {!isFreeAgentListNarrowed &&
+                    filteredFreeAgents.length > FREE_AGENT_DISPLAY_CAP
+                      ? ` — showing the first ${FREE_AGENT_DISPLAY_CAP}`
+                      : ''}
+                  </p>
                   <div className="divide-y divide-border rounded-lg border border-border">
-                    {players.map((player) => (
+                    {visibleFreeAgents.map((player) => (
                       <div
                         key={player.externalId}
                         className="flex items-center gap-3 px-4 py-3"
                       >
-                        <SlotBadge player={player} />
+                        <span className="flex h-7 w-14 shrink-0 items-center justify-center rounded-md border border-border text-xs font-bold uppercase tracking-wide text-foreground">
+                          {player.position ?? '—'}
+                        </span>
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">{player.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {player.position ?? '—'} · {player.team ?? 'FA'}
-                            {player.commenceTime
-                              ? ` · ${new Date(player.commenceTime).toLocaleString()}`
-                              : ''}
+                            {player.team ?? '—'}
                           </div>
                         </div>
-                        <LockStatusBadge status={player.lockStatus} />
                       </div>
                     ))}
+                    {visibleFreeAgents.length === 0 && (
+                      <p className="px-4 py-3 text-sm text-muted-foreground">
+                        No free agents match.
+                      </p>
+                    )}
                   </div>
-                </div>
-              );
-            });
-          })()}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

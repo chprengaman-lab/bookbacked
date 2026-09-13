@@ -1,5 +1,10 @@
 import { fetchLeagueProviderJson } from '@/lib/leagues/providers/http';
-import type { LeagueRoster, RosterSlot, RosteredPlayer } from '@/lib/leagues/types';
+import type {
+  FreeAgentPlayer,
+  LeagueRoster,
+  RosterSlot,
+  RosteredPlayer,
+} from '@/lib/leagues/types';
 
 const SLEEPER_BASE_URL = 'https://api.sleeper.app/v1';
 
@@ -51,6 +56,7 @@ export type SleeperPlayer = {
   position?: string | null;
   fantasy_positions?: string[] | null;
   team?: string | null;
+  active?: boolean | null;
 };
 
 export class SleeperUserNotFoundError extends Error {
@@ -258,4 +264,43 @@ export async function getSleeperLeagueRoster(
     ownerDisplayName: user.display_name,
     players,
   };
+}
+
+const FANTASY_RELEVANT_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
+
+/**
+ * Every fantasy-relevant player in the league not currently on any roster.
+ * No ranking/order -- that gets layered on once projections can be attached.
+ */
+export async function getSleeperLeagueFreeAgents(
+  leagueId: string,
+): Promise<FreeAgentPlayer[]> {
+  const [rosters, playersDictionary] = await Promise.all([
+    getSleeperLeagueRosters(leagueId),
+    getSleeperPlayersDictionary(),
+  ]);
+
+  const rosteredIds = new Set<string>();
+  for (const roster of rosters) {
+    for (const playerId of roster.players ?? []) rosteredIds.add(playerId);
+  }
+
+  const freeAgents: FreeAgentPlayer[] = [];
+  for (const [playerId, player] of playersDictionary) {
+    if (rosteredIds.has(playerId)) continue;
+    if (!player.active) continue;
+    if (!player.team) continue;
+
+    const position = player.position ?? player.fantasy_positions?.[0] ?? null;
+    if (!position || !FANTASY_RELEVANT_POSITIONS.has(position)) continue;
+
+    const name =
+      player.full_name ||
+      [player.first_name, player.last_name].filter(Boolean).join(' ') ||
+      playerId;
+
+    freeAgents.push({ externalId: playerId, name, position, team: player.team });
+  }
+
+  return freeAgents;
 }

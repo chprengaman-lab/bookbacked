@@ -25,3 +25,12 @@ export type LeagueRoster = {
   ownerDisplayName: string | null;
   players: RosteredPlayer[];
 };
+
+// Unrostered players available to add in a league. No ranking/order yet --
+// that's added once projections can be attached to this list.
+export type FreeAgentPlayer = {
+  externalId: string;
+  name: string;
+  position: string | null;
+  team: string | null;
+};
