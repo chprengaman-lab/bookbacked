@@ -24,6 +24,7 @@ import {
   fantasyProjectionBreakdownPpr,
   fantasyRangePpr,
 } from '@/lib/bookbacked/scoring';
+import { getDailyNflSnapshot } from '@/lib/bookbacked/snapshot-cache';
 import type {
   NflGameSnapshot,
   NflPlayerSnapshot,
@@ -83,8 +84,7 @@ function finalizePlayers(
     })
     .sort((left, right) => {
       const projectionOrder =
-        (right.fantasyProjectionPpr ?? -1) -
-        (left.fantasyProjectionPpr ?? -1);
+        (right.fantasyProjectionPpr ?? -1) - (left.fantasyProjectionPpr ?? -1);
       return projectionOrder || left.name.localeCompare(right.name);
     });
 }
@@ -224,9 +224,7 @@ function fantasyPlayerIds(events: SportsGameOddsEvent[]) {
   return [...ids];
 }
 
-async function loadSportsGameOddsPlayerMetadata(
-  events: SportsGameOddsEvent[],
-) {
+async function loadSportsGameOddsPlayerMetadata(events: SportsGameOddsEvent[]) {
   const ids = fantasyPlayerIds(events);
   const batches = Array.from(
     { length: Math.ceil(ids.length / 100) },
@@ -245,11 +243,7 @@ async function loadSportsGameOddsPlayerMetadata(
   );
 }
 
-function inWindow(
-  event: PropLineEvent,
-  startsAfter: Date,
-  startsBefore: Date,
-) {
+function inWindow(event: PropLineEvent, startsAfter: Date, startsBefore: Date) {
   const commenceTime = Date.parse(event.commence_time);
   return (
     Number.isFinite(commenceTime) &&
@@ -258,9 +252,15 @@ function inWindow(
   );
 }
 
-export async function getNflSnapshot(
-  options: GetNflSnapshotOptions = {},
-): Promise<NflSnapshot> {
+type NormalizedGetNflSnapshotOptions = {
+  now: Date;
+  horizonDays: number;
+  maxGames: number;
+};
+
+function normalizeOptions(
+  options: GetNflSnapshotOptions,
+): NormalizedGetNflSnapshotOptions {
   const now = options.now ?? new Date();
   const horizonDays = Math.min(
     Math.max(options.horizonDays ?? DEFAULT_HORIZON_DAYS, 1),
@@ -270,6 +270,15 @@ export async function getNflSnapshot(
     Math.max(options.maxGames ?? DEFAULT_MAX_GAMES, 1),
     32,
   );
+
+  return { now, horizonDays, maxGames };
+}
+
+async function loadNflSnapshot({
+  now,
+  horizonDays,
+  maxGames,
+}: NormalizedGetNflSnapshotOptions): Promise<NflSnapshot> {
   const startsAfter = new Date(
     now.getTime() - LIVE_LOOKBACK_HOURS * 60 * 60 * 1000,
   );
@@ -292,9 +301,7 @@ export async function getNflSnapshot(
 
   const providerStates: Record<OddsProvider, ProviderState> = {
     propline:
-      propLineEventsResult.status === 'fulfilled'
-        ? 'available'
-        : 'unavailable',
+      propLineEventsResult.status === 'fulfilled' ? 'available' : 'unavailable',
     'sports-game-odds':
       sportsGameOddsEventsResult.status === 'fulfilled'
         ? 'available'
@@ -310,8 +317,7 @@ export async function getNflSnapshot(
           .filter((event) => inWindow(event, startsAfter, startsBefore))
           .sort(
             (left, right) =>
-              Date.parse(left.commence_time) -
-              Date.parse(right.commence_time),
+              Date.parse(left.commence_time) - Date.parse(right.commence_time),
           )
           .slice(0, maxGames)
       : [];
@@ -327,9 +333,8 @@ export async function getNflSnapshot(
   const matchedSportsGameOddsIds = new Set<string>();
   const games = propLineEventData.map((eventData) => {
     const match =
-      sportsGameOddsEvents.find((event) =>
-        sameGame(eventData.event, event),
-      ) ?? null;
+      sportsGameOddsEvents.find((event) => sameGame(eventData.event, event)) ??
+      null;
     if (match) matchedSportsGameOddsIds.add(match.eventID);
     return gameFromPropLine(eventData, match, playerMetadata);
   });
@@ -362,4 +367,16 @@ export async function getNflSnapshot(
       )
       .slice(0, maxGames),
   };
+}
+
+export async function getNflSnapshot(
+  options: GetNflSnapshotOptions = {},
+): Promise<NflSnapshot> {
+  const request = normalizeOptions(options);
+
+  // Explicit timestamps are used for deterministic snapshots and should not
+  // read from or write to the production daily cache.
+  if (options.now) return loadNflSnapshot(request);
+
+  return getDailyNflSnapshot(request, () => loadNflSnapshot(request));
 }
