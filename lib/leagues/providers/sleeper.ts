@@ -1,5 +1,5 @@
 import { fetchLeagueProviderJson } from '@/lib/leagues/providers/http';
-import type { LeagueRoster, RosteredPlayer } from '@/lib/leagues/types';
+import type { LeagueRoster, RosterSlot, RosteredPlayer } from '@/lib/leagues/types';
 
 const SLEEPER_BASE_URL = 'https://api.sleeper.app/v1';
 
@@ -21,6 +21,10 @@ export type SleeperLeague = {
   sport: string;
   status: string;
   total_rosters: number;
+  // Ordered starting-lineup slot labels, e.g. ["QB","RB","RB","WR","WR","TE",
+  // "FLEX","FLEX","K","DEF","BN",...]. The non-"BN" entries line up 1:1, in
+  // order, with a roster's `starters` array.
+  roster_positions?: string[] | null;
 };
 
 export type SleeperRoster = {
@@ -29,7 +33,8 @@ export type SleeperRoster = {
   league_id: string;
   players: string[] | null;
   starters: string[] | null;
-  reserve: string[] | null;
+  reserve: string[] | null; // IR
+  taxi: string[] | null;
 };
 
 export type SleeperLeagueUser = {
@@ -143,9 +148,55 @@ export async function getSleeperLeaguesForUsername(
   return { user, leagues };
 }
 
+type SlotAssignment = {
+  slot: RosterSlot;
+  starterSlotLabel: string | null;
+  starterSlotOrder: number | null;
+};
+
+/**
+ * Maps every rostered player to a lineup slot from Sleeper's own roster
+ * fields: `starters` (paired index-for-index with the league's
+ * roster_positions, minus "BN" entries) for starter labels, then `reserve`
+ * (IR) and `taxi` (dynasty taxi squad), with everything else on `players`
+ * falling back to bench.
+ */
+function resolveRosterSlots(
+  roster: SleeperRoster,
+  rosterPositions: string[] | null | undefined,
+): Map<string, SlotAssignment> {
+  const slots = new Map<string, SlotAssignment>();
+
+  const starterLabels = (rosterPositions ?? []).filter((label) => label !== 'BN');
+  (roster.starters ?? []).forEach((playerId, index) => {
+    if (!playerId || playerId === '0') return; // empty starting slot
+    slots.set(playerId, {
+      slot: 'starter',
+      starterSlotLabel: starterLabels[index] ?? null,
+      starterSlotOrder: index,
+    });
+  });
+
+  for (const playerId of roster.reserve ?? []) {
+    if (!slots.has(playerId))
+      slots.set(playerId, { slot: 'ir', starterSlotLabel: null, starterSlotOrder: null });
+  }
+  for (const playerId of roster.taxi ?? []) {
+    if (!slots.has(playerId))
+      slots.set(playerId, { slot: 'taxi', starterSlotLabel: null, starterSlotOrder: null });
+  }
+  for (const playerId of roster.players ?? []) {
+    if (!slots.has(playerId))
+      slots.set(playerId, { slot: 'bench', starterSlotLabel: null, starterSlotOrder: null });
+  }
+
+  return slots;
+}
+
 function rosteredPlayerFromSleeperId(
   playerId: string,
   playersDictionary: Map<string, SleeperPlayer>,
+  slotAssignment: SlotAssignment,
 ): RosteredPlayer {
   const player = playersDictionary.get(playerId);
   const name =
@@ -159,6 +210,9 @@ function rosteredPlayerFromSleeperId(
     position: player?.position ?? player?.fantasy_positions?.[0] ?? null,
     team: player?.team ?? null,
     matchedSlug: null,
+    slot: slotAssignment.slot,
+    starterSlotLabel: slotAssignment.starterSlotLabel,
+    starterSlotOrder: slotAssignment.starterSlotOrder,
   };
 }
 
@@ -183,8 +237,17 @@ export async function getSleeperLeagueRoster(
   const roster = rosters.find((candidate) => candidate.owner_id === user.user_id);
   if (!roster) throw new SleeperRosterNotFoundError(user.user_id, leagueId);
 
+  const slotsByPlayerId = resolveRosterSlots(roster, league?.roster_positions);
   const players = (roster.players ?? []).map((playerId) =>
-    rosteredPlayerFromSleeperId(playerId, playersDictionary),
+    rosteredPlayerFromSleeperId(
+      playerId,
+      playersDictionary,
+      slotsByPlayerId.get(playerId) ?? {
+        slot: 'bench',
+        starterSlotLabel: null,
+        starterSlotOrder: null,
+      },
+    ),
   );
 
   return {

@@ -7,6 +7,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LockedRosteredPlayer } from '@/lib/leagues/locked';
+import type { RosterSlot } from '@/lib/leagues/types';
+
+const SLOT_SECTIONS: { slot: RosterSlot; label: string }[] = [
+  { slot: 'starter', label: 'Starting Lineup' },
+  { slot: 'bench', label: 'Bench' },
+  { slot: 'ir', label: 'IR' },
+  { slot: 'taxi', label: 'Taxi Squad' },
+];
+
+function groupBySlot(players: LockedRosteredPlayer[]) {
+  const groups = new Map<RosterSlot, LockedRosteredPlayer[]>(
+    SLOT_SECTIONS.map(({ slot }) => [slot, []]),
+  );
+  for (const player of players) {
+    groups.get(player.slot)?.push(player);
+  }
+  groups.get('starter')?.sort(
+    (left, right) => (left.starterSlotOrder ?? 0) - (right.starterSlotOrder ?? 0),
+  );
+  return groups;
+}
 
 type LeagueSummary = { leagueId: string; name: string; season: string };
 
@@ -164,25 +185,40 @@ export function LeagueImport() {
               be determined right now. Showing your roster only.
             </p>
           )}
-          <div className="divide-y divide-border rounded-lg border border-border">
-            {roster.players.map((player) => (
-              <div
-                key={player.externalId}
-                className="flex items-center justify-between gap-4 px-4 py-3"
-              >
-                <div>
-                  <div className="font-medium">{player.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {player.position ?? '—'} · {player.team ?? 'FA'}
-                    {player.commenceTime
-                      ? ` · ${new Date(player.commenceTime).toLocaleString()}`
-                      : ''}
+          {(() => {
+            const grouped = groupBySlot(roster.players);
+            return SLOT_SECTIONS.map(({ slot, label }) => {
+              const players = grouped.get(slot) ?? [];
+              if (players.length === 0) return null;
+              return (
+                <div key={slot} className="space-y-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    {label}
+                  </h3>
+                  <div className="divide-y divide-border rounded-lg border border-border">
+                    {players.map((player) => (
+                      <div
+                        key={player.externalId}
+                        className="flex items-center justify-between gap-4 px-4 py-3"
+                      >
+                        <div>
+                          <div className="font-medium">{player.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {(player.starterSlotLabel ?? player.position) ?? '—'} ·{' '}
+                            {player.team ?? 'FA'}
+                            {player.commenceTime
+                              ? ` · ${new Date(player.commenceTime).toLocaleString()}`
+                              : ''}
+                          </div>
+                        </div>
+                        <LockStatusBadge status={player.lockStatus} />
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <LockStatusBadge status={player.lockStatus} />
-              </div>
-            ))}
-          </div>
+              );
+            });
+          })()}
         </div>
       )}
     </div>
