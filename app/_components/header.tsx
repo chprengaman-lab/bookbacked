@@ -16,6 +16,7 @@ export function Header({
     { key: 'cheatsheet', label: 'Rankings' },
     { key: 'compare', label: 'Compare' },
     { key: 'optimizer', label: 'Optimizer' },
+    { key: 'league', label: 'My League' },
   ];
 
   return (

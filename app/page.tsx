@@ -6,6 +6,7 @@ import { Cheatsheet } from '@/app/_components/cheatsheet';
 import { Compare } from '@/app/_components/compare';
 import { demoPlayers } from '@/app/_components/demo-data';
 import { Header } from '@/app/_components/header';
+import { LeagueImport } from '@/app/_components/league';
 import { Optimizer } from '@/app/_components/optimizer';
 import type { View } from '@/app/_components/types';
 import {
@@ -22,7 +23,8 @@ export default function Home() {
     );
     return requestedView === 'cheatsheet' ||
       requestedView === 'compare' ||
-      requestedView === 'optimizer'
+      requestedView === 'optimizer' ||
+      requestedView === 'league'
       ? requestedView
       : 'cheatsheet';
   });
@@ -88,6 +90,7 @@ export default function Home() {
         />
       )}
       {activeView === 'optimizer' && <Optimizer />}
+      {activeView === 'league' && <LeagueImport />}
     </main>
   );
 }

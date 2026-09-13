@@ -1,1 +1,1 @@
-export type View = 'cheatsheet' | 'compare' | 'optimizer';
+export type View = 'cheatsheet' | 'compare' | 'optimizer' | 'league';
