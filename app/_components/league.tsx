@@ -16,8 +16,16 @@ const SLOT_SECTIONS: { slot: RosterSlot; label: string }[] = [
   { slot: 'taxi', label: 'Taxi Squad' },
 ];
 
+// Sleeper's raw label for an IDP flex slot; shortened for display.
+const STARTER_LABEL_OVERRIDES: Record<string, string> = {
+  IDP_FLEX: 'IDP',
+};
+
 function slotBadgeLabel(player: LockedRosteredPlayer) {
-  if (player.slot === 'starter') return player.starterSlotLabel ?? 'START';
+  if (player.slot === 'starter') {
+    const label = player.starterSlotLabel ?? 'START';
+    return STARTER_LABEL_OVERRIDES[label] ?? label;
+  }
   if (player.slot === 'ir') return 'IR';
   if (player.slot === 'taxi') return 'TAXI';
   return 'BN';
