@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'SMACK Football — Sportsbook-powered fantasy decisions',
+  title: 'Implied — Vegas-powered fantasy decisions',
   description:
     'Weekly fantasy football rankings, start/sit comparisons, and lineup optimization powered by sportsbook lines.',
 };

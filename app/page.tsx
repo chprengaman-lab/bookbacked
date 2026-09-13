@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowDownUp,
   ArrowLeftRight,
   ArrowUpRight,
   BarChart3,
+  CalendarDays,
   Check,
   ChevronDown,
   CircleHelp,
@@ -86,20 +87,24 @@ const lineupRows = [
   { slot: 'FLEX', current: 'Puka Nacua', balanced: 'Puka Nacua', floor: 'Puka Nacua', ceiling: 'Justin Jefferson' },
 ];
 
+function playerSlug(name: string) {
+  return name.toLowerCase().replaceAll('’', '').replaceAll(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 function Logo() {
   return (
     <div className="brand-lockup">
-      <div className="brand-mark" aria-hidden="true"><span>S</span></div>
+      <div className="brand-mark" aria-hidden="true"><span>I</span></div>
       <div>
-        <div className="brand-name">SMACK</div>
-        <div className="brand-subtitle">FOOTBALL INTELLIGENCE</div>
+        <div className="brand-name">IMPLIED</div>
+        <div className="brand-subtitle">VEGAS-POWERED FANTASY DECISIONS</div>
       </div>
     </div>
   );
 }
 
-function PlayerIdentity({ player, compact = false }: { player: Player; compact?: boolean }) {
-  return (
+function PlayerIdentity({ player, compact = false, linked = false }: { player: Player; compact?: boolean; linked?: boolean }) {
+  const identity = (
     <div className={compact ? 'player-cell player-cell-compact' : 'player-cell'}>
       <div className="team-badge" style={{ backgroundColor: player.color }}>{player.team}</div>
       <div>
@@ -108,19 +113,23 @@ function PlayerIdentity({ player, compact = false }: { player: Player; compact?:
       </div>
     </div>
   );
+
+  return linked
+    ? <a className="player-identity-link" href={`/player/${playerSlug(player.name)}`}>{identity}</a>
+    : identity;
 }
 
 function Header({ activeView, setActiveView }: { activeView: View; setActiveView: (view: View) => void }) {
   const labels: { key: View; label: string }[] = [
-    { key: 'cheatsheet', label: 'Cheatsheet' },
     { key: 'compare', label: 'Compare' },
+    { key: 'cheatsheet', label: 'Rankings' },
     { key: 'optimizer', label: 'Optimizer' },
   ];
 
   return (
     <header className="site-header">
       <div className="page-shell header-inner">
-        <button className="logo-button" onClick={() => setActiveView('cheatsheet')} aria-label="SMACK home"><Logo /></button>
+        <button className="logo-button" onClick={() => setActiveView('compare')} aria-label="Implied home"><Logo /></button>
         <nav className="main-nav" aria-label="Primary navigation">
           {labels.map((item) => (
             <button
@@ -144,6 +153,7 @@ function Header({ activeView, setActiveView }: { activeView: View; setActiveView
 function WeekControls({ onOptimize }: { onOptimize: () => void }) {
   return (
     <div className="heading-actions">
+      <span className="slate-pill"><CalendarDays aria-hidden="true" /> Thu + Sun + 1 Mon</span>
       <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
       <Button className="optimize-button" onClick={onOptimize}><Sparkles aria-hidden="true" /> Optimize lineup</Button>
     </div>
@@ -259,7 +269,12 @@ function Cheatsheet({ onCompare, onOptimize }: { onCompare: () => void; onOptimi
               {filteredPlayers.map((player, index) => (
                 <TableRow key={player.name}>
                   <TableCell className="rank-cell">{index + 1}</TableCell>
-                  <TableCell><PlayerIdentity player={player} /></TableCell>
+                  <TableCell>
+                    <a className="player-detail-link" href={`/player/${playerSlug(player.name)}`}>
+                      <PlayerIdentity player={player} />
+                      <ArrowUpRight aria-hidden="true" />
+                    </a>
+                  </TableCell>
                   <TableCell>
                     <div className="market-lines">
                       {player.markets.map((market, marketIndex) => (
@@ -354,7 +369,10 @@ function Compare() {
           <h1>Compare players</h1>
           <p>See where the market agrees, where outcomes diverge, and who gives your lineup the better path this week.</p>
         </div>
-        <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+        <div className="heading-actions">
+          <span className="slate-pill"><CalendarDays aria-hidden="true" /> Thu + Sun + 1 Mon</span>
+          <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+        </div>
       </section>
 
       <section className="compare-picker-card">
@@ -373,7 +391,7 @@ function Compare() {
       <section className="decision-banner">
         <div className="decision-icon"><Check aria-hidden="true" /></div>
         <div className="decision-copy">
-          <span>SMACK PICK</span>
+          <span>IMPLIED PICK</span>
           <h2>Start {advantage.name}</h2>
           <p>{advantage.name} carries a <strong>{projectionGap}-point market edge</strong> over {other.name}, supported by a stronger combined opportunity score.</p>
         </div>
@@ -386,9 +404,9 @@ function Compare() {
 
       <section className="comparison-card">
         <div className="comparison-head">
-          <div><PlayerIdentity player={left} /><div className="headline-projection"><strong>{left.projection}</strong><span>projected pts</span></div></div>
+          <div><PlayerIdentity player={left} linked /><div className="headline-projection"><strong>{left.projection}</strong><span>projected pts</span></div></div>
           <div className="versus-mark">VS</div>
-          <div><PlayerIdentity player={right} /><div className="headline-projection"><strong>{right.projection}</strong><span>projected pts</span></div></div>
+          <div><PlayerIdentity player={right} linked /><div className="headline-projection"><strong>{right.projection}</strong><span>projected pts</span></div></div>
         </div>
         <div className="comparison-rows">
           {comparisonRows.map((row) => (
@@ -435,7 +453,10 @@ function Optimizer() {
           <h1>Set your best lineup</h1>
           <p>Optimize the players already on your roster using the market’s expectation—and choose how much volatility you want.</p>
         </div>
-        <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+        <div className="heading-actions">
+          <span className="slate-pill"><CalendarDays aria-hidden="true" /> Thu + Sun + 1 Mon</span>
+          <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
+        </div>
       </section>
 
       <section className="optimizer-status-bar">
@@ -458,7 +479,7 @@ function Optimizer() {
               return (
                 <div className="lineup-row" key={`${row.slot}-${index}`}>
                   <span className="slot-label">{row.slot}</span>
-                  <PlayerIdentity player={player} compact />
+                  <PlayerIdentity player={player} compact linked />
                   <strong className="slot-projection">{player.projection.toFixed(1)}</strong>
                   <button className={isLocked ? 'lock-button is-locked' : 'lock-button'} onClick={() => toggleLock(row.current)} aria-label={`${isLocked ? 'Unlock' : 'Lock'} ${row.current}`}>
                     {isLocked ? <Lock aria-hidden="true" /> : <Unlock aria-hidden="true" />}
@@ -513,7 +534,14 @@ function Optimizer() {
 }
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<View>('cheatsheet');
+  const [activeView, setActiveView] = useState<View>('compare');
+
+  useEffect(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    if (requestedView === 'cheatsheet' || requestedView === 'compare' || requestedView === 'optimizer') {
+      setActiveView(requestedView);
+    }
+  }, []);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
