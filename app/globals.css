@@ -310,23 +310,6 @@ button {
   gap: 10px;
 }
 
-.slate-pill {
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  color: #637060;
-  background: #eef3df;
-  border: 1px solid #dce5bd;
-  border-radius: 99px;
-  font-size: 9px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.slate-pill svg { width: 13px; color: #729000; }
-
 .week-button,
 .optimize-button {
   height: 40px;
@@ -1610,7 +1593,6 @@ button {
   .page-heading { align-items: flex-start; flex-direction: column; gap: 18px; }
   .page-heading h1 { font-size: 31px; }
   .heading-actions { width: 100%; }
-  .slate-pill { display: none; }
   .heading-actions button:last-child { flex: 1; }
   .signal-grid { grid-template-columns: 1fr; }
   .signal-grid article:nth-child(2) { display: none; }

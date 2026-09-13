@@ -7,7 +7,6 @@ import {
   ArrowLeftRight,
   ArrowUpRight,
   BarChart3,
-  CalendarDays,
   Check,
   ChevronDown,
   CircleHelp,
@@ -94,10 +93,10 @@ function playerSlug(name: string) {
 function Logo() {
   return (
     <div className="brand-lockup">
-      <div className="brand-mark" aria-hidden="true"><span>I</span></div>
+      <div className="brand-mark" aria-hidden="true"><span>B</span></div>
       <div>
-        <div className="brand-name">IMPLIED</div>
-        <div className="brand-subtitle">VEGAS-POWERED FANTASY DECISIONS</div>
+        <div className="brand-name">BOOKBACKED</div>
+        <div className="brand-subtitle">BACKED BY THE BOOKS</div>
       </div>
     </div>
   );
@@ -129,7 +128,7 @@ function Header({ activeView, setActiveView }: { activeView: View; setActiveView
   return (
     <header className="site-header">
       <div className="page-shell header-inner">
-        <button className="logo-button" onClick={() => setActiveView('compare')} aria-label="Implied home"><Logo /></button>
+        <button className="logo-button" onClick={() => setActiveView('compare')} aria-label="BookBacked home"><Logo /></button>
         <nav className="main-nav" aria-label="Primary navigation">
           {labels.map((item) => (
             <button
@@ -153,7 +152,6 @@ function Header({ activeView, setActiveView }: { activeView: View; setActiveView
 function WeekControls({ onOptimize }: { onOptimize: () => void }) {
   return (
     <div className="heading-actions">
-      <span className="slate-pill"><CalendarDays aria-hidden="true" /> Thu + Sun + 1 Mon</span>
       <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
       <Button className="optimize-button" onClick={onOptimize}><Sparkles aria-hidden="true" /> Optimize lineup</Button>
     </div>
@@ -370,7 +368,6 @@ function Compare() {
           <p>See where the market agrees, where outcomes diverge, and who gives your lineup the better path this week.</p>
         </div>
         <div className="heading-actions">
-          <span className="slate-pill"><CalendarDays aria-hidden="true" /> Thu + Sun + 1 Mon</span>
           <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
         </div>
       </section>
@@ -391,7 +388,7 @@ function Compare() {
       <section className="decision-banner">
         <div className="decision-icon"><Check aria-hidden="true" /></div>
         <div className="decision-copy">
-          <span>IMPLIED PICK</span>
+          <span>BOOKBACKED PICK</span>
           <h2>Start {advantage.name}</h2>
           <p>{advantage.name} carries a <strong>{projectionGap}-point market edge</strong> over {other.name}, supported by a stronger combined opportunity score.</p>
         </div>
@@ -454,7 +451,6 @@ function Optimizer() {
           <p>Optimize the players already on your roster using the market’s expectation—and choose how much volatility you want.</p>
         </div>
         <div className="heading-actions">
-          <span className="slate-pill"><CalendarDays aria-hidden="true" /> Thu + Sun + 1 Mon</span>
           <Button variant="outline" className="week-button">Week 6 <ChevronDown aria-hidden="true" /></Button>
         </div>
       </section>

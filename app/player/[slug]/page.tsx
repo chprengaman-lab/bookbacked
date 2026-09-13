@@ -89,12 +89,12 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const profile = profiles.find((item) => item.slug === slug);
-  if (!profile) return { title: 'Player not found — Implied' };
+  if (!profile) return { title: 'Player not found — BookBacked' };
   return {
-    title: `${profile.name} sportsbook odds — Implied`,
+    title: `${profile.name} sportsbook odds — BookBacked`,
     description: `${profile.name} Week 6 fantasy projection, sportsbook lines, floor, ceiling, and market signals.`,
-    openGraph: { title: `${profile.name} sportsbook odds — Implied`, description: `${profile.name} Week 6 sportsbook-powered fantasy outlook.`, images: [] },
-    twitter: { card: 'summary', title: `${profile.name} sportsbook odds — Implied`, description: `${profile.name} Week 6 sportsbook-powered fantasy outlook.`, images: [] },
+    openGraph: { title: `${profile.name} sportsbook odds — BookBacked`, description: `${profile.name} Week 6 sportsbook-powered fantasy outlook.`, images: [] },
+    twitter: { card: 'summary', title: `${profile.name} sportsbook odds — BookBacked`, description: `${profile.name} Week 6 sportsbook-powered fantasy outlook.`, images: [] },
   };
 }
 
@@ -109,9 +109,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ slug: s
     <main className="min-h-screen bg-background text-foreground">
       <header className="site-header">
         <div className="page-shell header-inner detail-header-inner">
-          <a className="brand-lockup" href="/" aria-label="Implied home">
-            <div className="brand-mark" aria-hidden="true"><span>I</span></div>
-            <div><div className="brand-name">IMPLIED</div><div className="brand-subtitle">VEGAS-POWERED FANTASY DECISIONS</div></div>
+          <a className="brand-lockup" href="/" aria-label="BookBacked home">
+            <div className="brand-mark" aria-hidden="true"><span>B</span></div>
+            <div><div className="brand-name">BOOKBACKED</div><div className="brand-subtitle">BACKED BY THE BOOKS</div></div>
           </a>
           <nav className="main-nav" aria-label="Primary navigation">
             <a className="nav-item" href="/">Compare</a>
